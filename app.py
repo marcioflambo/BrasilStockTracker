@@ -5,8 +5,6 @@ from datetime import datetime
 from stock_data import StockDataManager
 from utils import format_currency, format_percentage, format_market_cap
 from stock_database import stock_db
-from watchlist_manager import WatchlistManager
-from portfolio_manager import PortfolioManager
 
 # Configuração da página
 st.set_page_config(
@@ -90,31 +88,15 @@ st.markdown("""
 if 'stock_manager' not in st.session_state:
     st.session_state.stock_manager = StockDataManager()
 
-if 'watchlist_manager' not in st.session_state:
-    st.session_state.watchlist_manager = WatchlistManager()
-
-if 'portfolio_manager' not in st.session_state:
-    st.session_state.portfolio_manager = PortfolioManager()
-
-# Inicialização do banco de dados de ações
-if 'database_initialized' not in st.session_state:
-    st.session_state.database_initialized = True
-
-# Carregar watchlist persistente
+# Watchlist simples sem persistência
 if 'watched_stocks' not in st.session_state:
-    st.session_state.watched_stocks = st.session_state.watchlist_manager.load_watchlist()
+    st.session_state.watched_stocks = []
 
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
 
 if 'last_update' not in st.session_state:
     st.session_state.last_update = None
-
-if 'portfolio' not in st.session_state:
-    st.session_state.portfolio = st.session_state.portfolio_manager.load_portfolio()
-
-if 'show_barsi_filter' not in st.session_state:
-    st.session_state.show_barsi_filter = False
 
 # Funções auxiliares dinâmicas
 def get_all_tickers():
@@ -206,7 +188,6 @@ if st.session_state.show_config:
             
             if st.button("❌ Limpar Seleções"):
                 st.session_state.watched_stocks = []
-                st.session_state.watchlist_manager.save_watchlist([])
                 st.success("Seleções limpas!")
                 st.rerun()
         
@@ -240,202 +221,85 @@ if st.session_state.show_config:
         
         st.markdown("---")
         
-        # Tabs para organizar funcionalidades
-        tab1, tab2, tab3 = st.tabs(["📋 Seleção de Ações", "💼 Carteira de Investimentos", "🎯 Filtro Barsi"])
+        # Tab única para seleção de ações
+        st.subheader("📋 Seleção de Ações para Monitoramento")
         
-        with tab1:
-            st.subheader("Selecionar Ações para Monitoramento")
-            
-            # Criar listas ordenadas
-            all_tickers = sorted(get_all_tickers())
-            current_watched = set(st.session_state.watched_stocks)
-            
-            # Filtros em linha
-            col1, col2 = st.columns(2)
-            with col1:
-                search_filter = st.text_input(
-                    "Buscar ações:",
-                    placeholder="Ex: Itaú, PETR4, Bancos...",
-                    key="stock_filter"
-                )
-            
-            with col2:
-                sectors = get_sectors()
-                selected_sector = st.selectbox(
-                    "Filtrar por setor:",
-                    options=["Todos"] + sectors,
-                    key="sector_filter"
-                )
-            
-            # Filtrar lista
-            if search_filter:
-                filtered_results = search_stocks(search_filter)
-                filtered_tickers = [r['ticker'] for r in filtered_results]
-            elif selected_sector != "Todos":
-                filtered_tickers = get_tickers_by_sector(selected_sector)
-            else:
-                filtered_tickers = all_tickers[:30]  # Limitar para performance
-            
-            # Botões de seleção rápida
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("✅ Selecionar Filtradas", use_container_width=True):
-                    new_selections = current_watched.union(set(filtered_tickers))
-                    st.session_state.watched_stocks = list(new_selections)
-                    st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
-                    st.success(f"{len(filtered_tickers)} ações adicionadas!")
-                    st.rerun()
-            
-            with col2:
-                if st.button("❌ Desmarcar Filtradas", use_container_width=True):
-                    new_selections = current_watched - set(filtered_tickers)
-                    st.session_state.watched_stocks = list(new_selections)
-                    st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
-                    st.success(f"{len(filtered_tickers)} ações removidas!")
-                    st.rerun()
-            
-            # Lista de seleção compacta
-            if filtered_tickers:
-                st.write(f"**Ações ({len(filtered_tickers)}):**")
-                
-                with st.form("quick_selection"):
-                    # Organizar em colunas para economizar espaço
-                    cols = st.columns(3)
-                    new_watched_set = current_watched.copy()
-                    
-                    for i, ticker in enumerate(filtered_tickers[:30]):  # Limitar a 30
-                        col_idx = i % 3
-                        name = get_stock_name(ticker)
-                        
-                        with cols[col_idx]:
-                            is_selected = st.checkbox(
-                                f"{ticker}",
-                                value=ticker in current_watched,
-                                key=f"cb_{ticker}",
-                                help=f"{name}"
-                            )
-                            
-                            if is_selected:
-                                new_watched_set.add(ticker)
-                            else:
-                                new_watched_set.discard(ticker)
-                    
-                    if st.form_submit_button("💾 Salvar Seleções", type="primary"):
-                        st.session_state.watched_stocks = list(new_watched_set)
-                        st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
-                        st.success(f"Watchlist atualizada! {len(st.session_state.watched_stocks)} ações.")
-                        st.rerun()
+        # Criar listas ordenadas
+        all_tickers = sorted(get_all_tickers())
+        current_watched = set(st.session_state.watched_stocks)
         
-        with tab2:
-            st.subheader("💼 Gerenciar Carteira de Investimentos")
-            
-            # Adicionar posições na carteira
-            col1, col2 = st.columns(2)
-            with col1:
-                portfolio_ticker = st.selectbox(
-                    "Ação para adicionar na carteira:",
-                    options=sorted(get_all_tickers()),
-                    help="Selecione uma ação para adicionar à carteira"
-                )
-                
-            with col2:
-                quantity = st.number_input(
-                    "Quantidade de ações:",
-                    min_value=0,
-                    value=0,
-                    step=1,
-                    help="0 para remover da carteira"
-                )
-            
-            if st.button("💾 Salvar na Carteira", type="primary"):
-                st.session_state.portfolio = st.session_state.portfolio_manager.add_position(
-                    portfolio_ticker, quantity, st.session_state.portfolio
-                )
-                st.session_state.portfolio_manager.save_portfolio(st.session_state.portfolio)
-                
-                if quantity > 0:
-                    st.success(f"Adicionado {quantity} ações de {portfolio_ticker} na carteira!")
-                else:
-                    st.success(f"{portfolio_ticker} removido da carteira!")
+        # Filtros em linha
+        col1, col2 = st.columns(2)
+        with col1:
+            search_filter = st.text_input(
+                "Buscar ações:",
+                placeholder="Ex: Itaú, PETR4, Bancos...",
+                key="stock_filter"
+            )
+        
+        with col2:
+            sectors = get_sectors()
+            selected_sector = st.selectbox(
+                "Filtrar por setor:",
+                options=["Todos"] + sectors,
+                key="sector_filter"
+            )
+        
+        # Filtrar lista
+        if search_filter:
+            filtered_results = search_stocks(search_filter)
+            filtered_tickers = [r['ticker'] for r in filtered_results]
+        elif selected_sector != "Todos":
+            filtered_tickers = get_tickers_by_sector(selected_sector)
+        else:
+            filtered_tickers = all_tickers[:30]  # Limitar para performance
+        
+        # Botões de seleção rápida
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Selecionar Filtradas", use_container_width=True):
+                new_selections = current_watched.union(set(filtered_tickers))
+                st.session_state.watched_stocks = list(new_selections)
+                st.success(f"{len(filtered_tickers)} ações adicionadas!")
                 st.rerun()
-            
-            # Mostrar carteira atual
-            if st.session_state.portfolio:
-                st.markdown("---")
-                st.write("**Sua Carteira Atual:**")
-                
-                for ticker, qty in st.session_state.portfolio.items():
-                    name = get_stock_name(ticker)
-                    st.write(f"• **{ticker}** ({name}): {qty:,} ações")
-                
-                # Botão para limpar carteira
-                if st.button("🗑️ Limpar Carteira", type="secondary"):
-                    st.session_state.portfolio = {}
-                    st.session_state.portfolio_manager.save_portfolio({})
-                    st.success("Carteira limpa!")
-                    st.rerun()
-            else:
-                st.info("Sua carteira está vazia. Adicione algumas ações acima!")
         
-        with tab3:
-            st.subheader("🎯 Filtro Metodologia Barsi")
+        with col2:
+            if st.button("❌ Desmarcar Filtradas", use_container_width=True):
+                new_selections = current_watched - set(filtered_tickers)
+                st.session_state.watched_stocks = list(new_selections)
+                st.success(f"{len(filtered_tickers)} ações removidas!")
+                st.rerun()
+        
+        # Lista de seleção compacta
+        if filtered_tickers:
+            st.write(f"**Ações ({len(filtered_tickers)}):**")
             
-            st.write("""
-            **Critérios da Metodologia Luiz Barsi Filho:**
-            - ✅ Empresa paga dividendos consistentemente
-            - ✅ P/L entre 3 e 15 (preço justo)
-            - ✅ ROE > 15% (rentabilidade do patrimônio)
-            - ✅ Valor de mercado > R$ 1 bilhão (empresa consolidada)
-            """)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                barsi_filter = st.checkbox(
-                    "Mostrar apenas ações que atendem critérios Barsi",
-                    value=st.session_state.show_barsi_filter,
-                    help="Filtra apenas empresas de qualidade segundo Barsi"
-                )
-                st.session_state.show_barsi_filter = barsi_filter
-            
-            with col2:
-                if st.button("📊 Adicionar Ações Barsi à Watchlist"):
-                    if 'stock_data' in st.session_state and not st.session_state.stock_data.empty:
-                        # Encontrar ações que atendem aos critérios Barsi
-                        barsi_stocks = st.session_state.portfolio_manager.filter_barsi_stocks(st.session_state.stock_data)
+            with st.form("quick_selection"):
+                # Organizar em colunas para economizar espaço
+                cols = st.columns(3)
+                new_watched_set = current_watched.copy()
+                
+                for i, ticker in enumerate(filtered_tickers[:30]):  # Limitar a 30
+                    col_idx = i % 3
+                    name = get_stock_name(ticker)
+                    
+                    with cols[col_idx]:
+                        is_selected = st.checkbox(
+                            f"{ticker}",
+                            value=ticker in current_watched,
+                            key=f"cb_{ticker}",
+                            help=f"{name}"
+                        )
                         
-                        if barsi_stocks:
-                            # Adicionar à watchlist
-                            current_watched = set(st.session_state.watched_stocks)
-                            new_watched = current_watched.union(set(barsi_stocks))
-                            st.session_state.watched_stocks = list(new_watched)
-                            st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
-                            
-                            st.success(f"✅ {len(barsi_stocks)} ações que atendem critérios Barsi adicionadas à watchlist!")
-                            st.rerun()
+                        if is_selected:
+                            new_watched_set.add(ticker)
                         else:
-                            st.warning("Nenhuma ação atende aos critérios Barsi no momento.")
-                    else:
-                        st.info("Carregue dados das ações primeiro para usar esta função!")
-            
-            st.markdown("---")
-            st.write("**Filtros Adicionais:**")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                no_dividend_filter = st.checkbox(
-                    "Mostrar apenas empresas SEM dividendos",
-                    help="Identifica empresas que não pagam dividendos"
-                )
-            
-            with col2:
-                high_yield_filter = st.checkbox(
-                    "Dividend Yield > 6%",
-                    help="Empresas com alto rendimento de dividendos"
-                )
-            
-            # Salvar filtros no session state
-            st.session_state.no_dividend_filter = no_dividend_filter
-            st.session_state.high_yield_filter = high_yield_filter
+                            new_watched_set.discard(ticker)
+                
+                if st.form_submit_button("💾 Salvar Seleções", type="primary"):
+                    st.session_state.watched_stocks = list(new_watched_set)
+                    st.success(f"Watchlist atualizada! {len(st.session_state.watched_stocks)} ações.")
+                    st.rerun()
 
 # Sidebar compacta
 with st.sidebar:
@@ -443,222 +307,148 @@ with st.sidebar:
     
     # Status do auto-refresh
     if st.session_state.auto_refresh:
-        st.success("🟢 Auto-refresh ativo")
+        st.success("🔄 Auto-refresh: ON")
     else:
-        st.info("⏸️ Auto-refresh pausado")
+        st.info("⏸️ Auto-refresh: OFF")
     
     # Última atualização
     if st.session_state.last_update:
-        update_time = datetime.fromtimestamp(st.session_state.last_update).strftime("%H:%M:%S")
-        st.caption(f"Última atualização: {update_time}")
+        st.write(f"**Última atualização:** {st.session_state.last_update.strftime('%H:%M:%S')}")
+    else:
+        st.write("**Status:** Aguardando dados...")
     
     st.markdown("---")
     
-    # Lista compacta de ações selecionadas
-    if st.session_state.watched_stocks:
-        st.subheader(f"Monitoradas ({len(st.session_state.watched_stocks)})")
-        
-        # Mostrar apenas algumas com scroll
-        for stock in st.session_state.watched_stocks[:8]:
-            name = get_stock_name(stock)
-            st.caption(f"• {stock}")
-        
-        if len(st.session_state.watched_stocks) > 8:
-            st.caption(f"... e mais {len(st.session_state.watched_stocks) - 8} ações")
-    else:
-        st.warning("Nenhuma ação selecionada")
-        st.caption("Use ⚙️ Configurar para selecionar ações")
-
-# Área principal
-if st.session_state.watched_stocks:
-    # Placeholder para mostrar status de carregamento
-    status_placeholder = st.empty()
+    # Adicionar ações rápida
+    st.subheader("➕ Adicionar Ação")
     
-    # Container para a tabela
-    table_container = st.container()
-    
-    # Lógica de atualização
-    should_update = False
-    
-    if st.session_state.last_update is None:
-        should_update = True
-    elif st.session_state.auto_refresh:
-        time_since_update = time.time() - st.session_state.last_update
-        if time_since_update >= 2:  # 2 segundos
-            should_update = True
-    
-    if should_update:
-        with status_placeholder:
-            with st.spinner("📊 Carregando dados das ações..."):
-                # Obter dados atualizados
-                df = st.session_state.stock_manager.get_stock_data(st.session_state.watched_stocks)
-                st.session_state.stock_data = df
-                st.session_state.last_update = time.time()
-    
-    # Exibir dados se disponíveis
-    if 'stock_data' in st.session_state and not st.session_state.stock_data.empty:
-        status_placeholder.empty()
-        
-        # Tabela de dados com título clean
-        st.subheader("💹 Dashboard de Ações")
-        
-        # Preparar dados para exibição
-        display_df = st.session_state.stock_data.copy()
-        
-        # Aplicar filtros se habilitados
-        if st.session_state.show_barsi_filter:
-            # Filtrar apenas ações que atendem aos critérios Barsi
-            display_df = display_df[display_df['Critério Barsi'].str.contains('✅|⚠️', na=False)]
-        
-        if st.session_state.get('no_dividend_filter', False):
-            # Mostrar apenas empresas que NÃO pagam dividendos
-            display_df = display_df[display_df['Paga Dividendos'] == 'Não']
-        
-        if st.session_state.get('high_yield_filter', False):
-            # Mostrar apenas empresas com DY > 6%
-            display_df = display_df[
-                (display_df['DY Atual (%)'] != 'N/A') & 
-                (display_df['DY Atual (%)'] > 6)
-            ]
-        
-        # Formatação dos dados para exibição
-        format_columns = {
-            'Preço Atual': lambda x: format_currency(x) if x != 'N/A' else 'N/A',
-            'Variação (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-            'DY Atual (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-            'DY Médio 5a (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-            'Div/Ação (R$)': lambda x: format_currency(x) if x != 'N/A' else 'N/A',
-            'P/L': lambda x: f"{x:.2f}" if x != 'N/A' else 'N/A',
-            'P/VP': lambda x: f"{x:.2f}" if x != 'N/A' else 'N/A',
-            'ROE (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-            'Dívida/PL': lambda x: f"{x:.2f}" if x != 'N/A' else 'N/A',
-            'Margem Líq. (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-            'Valor de Mercado': lambda x: format_market_cap(x) if x != 'N/A' else 'N/A'
-        }
-        
-        # Aplicar formatação
-        formatted_df = display_df.copy()
-        for col, formatter in format_columns.items():
-            if col in formatted_df.columns:
-                formatted_df[col] = formatted_df[col].apply(formatter)
-        
-        # Informações de filtros ativos
-        filter_info = []
-        if st.session_state.show_barsi_filter:
-            filter_info.append("🎯 Critérios Barsi")
-        if st.session_state.get('no_dividend_filter', False):
-            filter_info.append("🚫 Sem dividendos")
-        if st.session_state.get('high_yield_filter', False):
-            filter_info.append("📈 DY > 6%")
-        
-        if filter_info:
-            st.info(f"Filtros ativos: {' | '.join(filter_info)}")
-        
-        # Exibir tabela com configuração otimizada
-        st.dataframe(
-            formatted_df,
-            use_container_width=True,
-            height=500,
-            column_config={
-                "Ticker": st.column_config.TextColumn("Código", width="small"),
-                "Nome": st.column_config.TextColumn("Empresa", width="medium"),
-                "Preço Atual": st.column_config.TextColumn("Preço", width="small"),
-                "Variação (%)": st.column_config.TextColumn("Var. %", width="small"),
-                "DY Atual (%)": st.column_config.TextColumn("DY Atual", width="small"),
-                "DY Médio 5a (%)": st.column_config.TextColumn("DY 5a", width="small"),
-                "Div/Ação (R$)": st.column_config.TextColumn("Div/Ação", width="small"),
-                "Paga Dividendos": st.column_config.TextColumn("Dividendos", width="small"),
-                "P/L": st.column_config.TextColumn("P/L", width="small"),
-                "P/VP": st.column_config.TextColumn("P/VP", width="small"),
-                "ROE (%)": st.column_config.TextColumn("ROE", width="small"),
-                "Dívida/PL": st.column_config.TextColumn("Dívi/PL", width="small"),
-                "Margem Líq. (%)": st.column_config.TextColumn("Margem", width="small"),
-                "Valor de Mercado": st.column_config.TextColumn("Val. Mercado", width="medium"),
-                "Setor": st.column_config.TextColumn("Setor", width="medium"),
-                "Critério Barsi": st.column_config.TextColumn("Barsi", width="medium")
-            },
-            hide_index=True
-        )
-        
-        # Mostrar estatísticas da carteira se existir
-        if st.session_state.portfolio:
-            st.markdown("---")
-            st.subheader("💼 Resumo da Carteira")
-            
-            # Calcular projeção de dividendos
-            future_dividends = st.session_state.portfolio_manager.calculate_future_dividends(
-                st.session_state.portfolio, 
-                st.session_state.stock_data
-            )
-            
-            # Calcular valor total da carteira
-            portfolio_value = st.session_state.portfolio_manager.get_portfolio_value(
-                st.session_state.portfolio,
-                st.session_state.stock_data
-            )
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Valor da Carteira", format_currency(portfolio_value))
-            
-            with col2:
-                total_future_dividends = sum(future_dividends.values())
-                st.metric("Dividendos Anuais Projetados", format_currency(total_future_dividends))
-            
-            with col3:
-                if portfolio_value > 0:
-                    yield_projection = (total_future_dividends / portfolio_value) * 100
-                    st.metric("Yield da Carteira", format_percentage(yield_projection))
-                else:
-                    st.metric("Yield da Carteira", "N/A")
-            
-            # Detalhes por ação na carteira
-            if future_dividends:
-                st.write("**Projeção de Dividendos por Ação:**")
-                for ticker, dividend in future_dividends.items():
-                    if dividend > 0:
-                        quantity = st.session_state.portfolio[ticker]
-                        name = get_stock_name(ticker)
-                        st.write(f"• **{ticker}** ({name}): {format_currency(dividend)} ({quantity:,} ações)")
-            else:
-                st.info("Nenhuma ação na carteira paga dividendos no momento.")
-    else:
-        status_placeholder.error("❌ Erro ao carregar dados das ações")
-
-else:
-    # Tela inicial quando não há ações selecionadas
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.info("🚀 **Bem-vindo ao Monitor de Ações!**")
-        st.markdown("""
-        **Para começar:**
-        1. Clique em **⚙️ Configurar** acima
-        2. Selecione as ações que deseja monitorar
-        3. Volte aqui para ver os dados em tempo real!
-        """)
-        
-        if st.button("⚙️ Configurar Ações", type="primary", use_container_width=True):
-            st.session_state.show_config = True
-            st.rerun()
-
-# Auto-refresh logic - melhorado para evitar loops infinitos
-if st.session_state.auto_refresh and st.session_state.watched_stocks:
-    # Só refresh se há ações para monitorar e não houve atualização recente
-    current_time = time.time()
-    if not st.session_state.last_update or (current_time - st.session_state.last_update) >= 2:
-        time.sleep(0.5)  # Pausa maior para estabilidade
-        st.rerun()
-
-# Rodapé simplificado
-st.markdown("<br><br>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.markdown(
-        """
-        <div style='text-align: center; color: #888; font-size: 11px; padding: 20px;'>
-        📊 Dados: Yahoo Finance | 🔄 Atualização: Tempo real | 🚀 Powered by Streamlit
-        </div>
-        """,
-        unsafe_allow_html=True
+    # Input direto
+    new_ticker = st.text_input(
+        "Código da ação:",
+        placeholder="Ex: PETR4",
+        help="Digite o código da ação (sem .SA)"
     )
+    
+    if st.button("📌 Adicionar", use_container_width=True):
+        if new_ticker:
+            # Formatar ticker
+            formatted_ticker = new_ticker.upper().strip()
+            if not formatted_ticker.endswith('.SA'):
+                formatted_ticker += '.SA'
+            
+            # Verificar se existe
+            if formatted_ticker in get_all_tickers():
+                if formatted_ticker not in st.session_state.watched_stocks:
+                    st.session_state.watched_stocks.append(formatted_ticker)
+                    st.success(f"✅ {formatted_ticker} adicionada!")
+                    st.rerun()
+                else:
+                    st.warning(f"⚠️ {formatted_ticker} já está na lista!")
+            else:
+                st.error(f"❌ {formatted_ticker} não encontrada!")
+    
+    # Ações populares
+    if st.button("⭐ Adicionar Populares", use_container_width=True):
+        popular = get_popular_stocks()[:10]
+        current = set(st.session_state.watched_stocks)
+        new_stocks = [stock for stock in popular if stock not in current]
+        if new_stocks:
+            st.session_state.watched_stocks.extend(new_stocks[:5])
+            st.success(f"✅ {len(new_stocks[:5])} ações populares adicionadas!")
+            st.rerun()
+        else:
+            st.info("Todas as ações populares já estão na lista!")
+
+# Área principal: Monitor de ações
+st.markdown("---")
+
+# Verificar se há ações para monitorar
+if not st.session_state.watched_stocks:
+    st.info("📋 Nenhuma ação selecionada para monitoramento. Use o painel de configurações acima para adicionar ações.")
+else:
+    # Buscar dados das ações
+    with st.spinner("Carregando dados das ações..."):
+        try:
+            stock_data = st.session_state.stock_manager.get_stock_data(st.session_state.watched_stocks)
+            st.session_state.stock_data = stock_data
+            st.session_state.last_update = datetime.now()
+            
+            if not stock_data.empty:
+                # Formatação para exibição
+                display_data = stock_data.copy()
+                
+                # Formatar colunas numéricas
+                numeric_columns = ['Preço Atual', 'Variação (%)', 'DY Atual (%)', 'DY Médio 5a (%)', 
+                                   'Div/Ação (R$)', 'P/L', 'P/VP', 'ROE (%)', 'Dívida/PL', 'Margem Líq. (%)']
+                
+                for col in numeric_columns:
+                    if col in display_data.columns:
+                        display_data[col] = pd.to_numeric(display_data[col], errors='coerce')
+                
+                # Criar dataframe formatado para exibição
+                formatted_df = display_data.copy()
+                
+                # Aplicar formatações específicas
+                if 'Preço Atual' in formatted_df.columns:
+                    formatted_df['Preço Atual'] = formatted_df['Preço Atual'].apply(lambda x: format_currency(x) if pd.notna(x) else 'N/A')
+                
+                if 'Variação (%)' in formatted_df.columns:
+                    formatted_df['Variação (%)'] = formatted_df['Variação (%)'].apply(lambda x: format_percentage(x) if pd.notna(x) else 'N/A')
+                
+                if 'Valor de Mercado' in formatted_df.columns:
+                    formatted_df['Valor de Mercado'] = formatted_df['Valor de Mercado'].apply(lambda x: format_market_cap(x) if pd.notna(x) else 'N/A')
+                
+                percentage_cols = ['DY Atual (%)', 'DY Médio 5a (%)', 'ROE (%)', 'Margem Líq. (%)']
+                for col in percentage_cols:
+                    if col in formatted_df.columns:
+                        formatted_df[col] = formatted_df[col].apply(lambda x: format_percentage(x) if pd.notna(x) else 'N/A')
+                
+                currency_cols = ['Div/Ação (R$)']
+                for col in currency_cols:
+                    if col in formatted_df.columns:
+                        formatted_df[col] = formatted_df[col].apply(lambda x: format_currency(x) if pd.notna(x) else 'N/A')
+                
+                ratio_cols = ['P/L', 'P/VP', 'Dívida/PL']
+                for col in ratio_cols:
+                    if col in formatted_df.columns:
+                        formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else 'N/A')
+                
+                # Substituir NaN por N/A
+                formatted_df = formatted_df.fillna('N/A')
+                
+                # Exibir tabela com configuração otimizada
+                st.dataframe(
+                    formatted_df,
+                    use_container_width=True,
+                    height=500,
+                    column_config={
+                        "Ticker": st.column_config.TextColumn("Código", width="small"),
+                        "Nome": st.column_config.TextColumn("Empresa", width="medium"),
+                        "Preço Atual": st.column_config.TextColumn("Preço", width="small"),
+                        "Variação (%)": st.column_config.TextColumn("Var. %", width="small"),
+                        "DY Atual (%)": st.column_config.TextColumn("DY Atual", width="small"),
+                        "DY Médio 5a (%)": st.column_config.TextColumn("DY 5a", width="small"),
+                        "Div/Ação (R$)": st.column_config.TextColumn("Div/Ação", width="small"),
+                        "Paga Dividendos": st.column_config.TextColumn("Dividendos", width="small"),
+                        "P/L": st.column_config.TextColumn("P/L", width="small"),
+                        "P/VP": st.column_config.TextColumn("P/VP", width="small"),
+                        "ROE (%)": st.column_config.TextColumn("ROE", width="small"),
+                        "Dívida/PL": st.column_config.TextColumn("Dívi/PL", width="small"),
+                        "Margem Líq. (%)": st.column_config.TextColumn("Margem", width="small"),
+                        "Valor de Mercado": st.column_config.TextColumn("Val. Mercado", width="medium"),
+                        "Setor": st.column_config.TextColumn("Setor", width="medium"),
+                        "Critério Barsi": st.column_config.TextColumn("Barsi", width="medium")
+                    },
+                    hide_index=True
+                )
+                
+            else:
+                st.warning("⚠️ Não foi possível carregar dados para as ações selecionadas.")
+                
+        except Exception as e:
+            st.error(f"❌ Erro ao carregar dados: {str(e)}")
+
+# Auto-refresh
+if st.session_state.auto_refresh and st.session_state.watched_stocks:
+    time.sleep(2)
+    st.rerun()

@@ -85,40 +85,34 @@ The application is designed for Replit deployment with the following characteris
 - **Session Management**: Uses Streamlit's built-in session state for data persistence
 - **Performance**: Implements caching to minimize API calls and improve response times
 
-### Default Watchlist
-The application comes pre-configured with major Brazilian stocks:
-- ITUB4.SA (Itaú Unibanco)
-- PETR4.SA (Petrobras)
-- VALE3.SA (Vale)
-- BBDC4.SA (Bradesco)
-- ABEV3.SA (Ambev)
-
-### Complete Stock Database System (Updated: July 2025)
-The application now uses a comprehensive database system for Brazilian stocks:
-- **Complete B3 stock coverage** with 300+ Brazilian stocks
-- **JSON-based persistent storage** with detailed stock information
-- **On-demand database updates** via configuration panel button
-- **Comprehensive stock data** including:
-  - Company names and ticker symbols
-  - Industry sectors and classifications
-  - ISIN codes for international identification
-  - Direct links to market data (dadosdemercado.com.br)
-  - Market cap, currency, and exchange information
-- **Intelligent caching** with 24-hour expiry for performance
-- **Manual update control** - users decide when to refresh data
-- **No API call limits** during normal operation
-- **Robust error handling** with fallback mechanisms
-- **Database statistics** showing total stocks, sectors, and last update
+### Dynamic Stock Database System (Updated: July 2025)
+The application uses a completely dynamic database system:
+- **Zero hardcoded data**: All stock information sourced from dadosdemercado.com.br
+- **Web scraping integration**: Uses trafilatura to extract stock data from web
+- **JSON-based storage**: Persistent storage with detailed stock information
+- **On-demand updates**: Manual database refresh via configuration panel
+- **Authentic data only**: No fallback or synthetic stock lists
+- **Clean architecture**: Removed all fixed data dependencies
+- **Comprehensive coverage**: Dynamic discovery of all B3 stocks
+- **Real-time data**: Integration with Yahoo Finance for live prices
 
 ### Key Features
 - Real-time stock price monitoring with comprehensive financial metrics
 - Automatic refresh capability every 2 seconds
-- Dynamic watchlist management with multiple addition methods:
-  - Search by name or ticker
-  - Browse by sector
-  - Quick-add popular stocks
-  - Manual ticker entry
+- Dynamic watchlist management:
+  - Search by name or ticker from database
+  - Browse by sector from scraped data
+  - Manual ticker entry with validation
 - Brazilian currency formatting with smart scaling (K, M, B, T)
+- Clean UI with simplified configuration panel
+- Database statistics showing dynamically loaded stocks
 - Error handling for unavailable stocks
-- Responsive web interface with tabbed navigation
-- Database statistics display (total stocks and sectors available)
+- Responsive web interface optimized for stock monitoring
+
+### Recent Changes (July 2025)
+- **Complete code cleanup**: Removed all hardcoded stock data
+- **Dynamic data only**: Stock information exclusively from dadosdemercado.com.br
+- **Simplified architecture**: Removed portfolio and watchlist persistence modules
+- **Clean codebase**: Eliminated all fixed stock lists and synthetic fallbacks
+- **Streamlined functionality**: Focus on core stock monitoring features
+- **Database-driven**: All stock selections filtered from JSON database
