@@ -408,10 +408,13 @@ else:
             st.session_state.show_config = True
             st.rerun()
 
-# Auto-refresh logic
-if st.session_state.auto_refresh:
-    time.sleep(0.1)  # Pequena pausa para evitar refresh muito agressivo
-    st.rerun()
+# Auto-refresh logic - melhorado para evitar loops infinitos
+if st.session_state.auto_refresh and st.session_state.watched_stocks:
+    # Só refresh se há ações para monitorar e não houve atualização recente
+    current_time = time.time()
+    if not st.session_state.last_update or (current_time - st.session_state.last_update) >= 2:
+        time.sleep(0.5)  # Pausa maior para estabilidade
+        st.rerun()
 
 # Rodapé simplificado
 st.markdown("<br><br>", unsafe_allow_html=True)

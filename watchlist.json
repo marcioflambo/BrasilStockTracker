@@ -1,4 +1,11 @@
 {
-  "watched_stocks": [],
-  "last_updated": "\"2025-07-11 09:54:20.155170\""
+  "watched_stocks": [
+    "BBAS3.SA",
+    "SANB11.SA",
+    "BBDC3.SA",
+    "BBDC4.SA",
+    "BPAC11.SA",
+    "ITUB4.SA"
+  ],
+  "last_updated": "\"2025-07-11 09:59:12.140273\""
 }
