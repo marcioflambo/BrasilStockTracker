@@ -232,14 +232,50 @@ class StockDatabase:
         stocks = self.load_database()
         return stocks.get(ticker)
     
+    def get_besst_sector_tickers(self) -> List[str]:
+        """Retorna apenas tickers de empresas dos setores BESST"""
+        stocks = self.load_database()
+        besst_tickers = []
+        
+        # Critérios de setores BESST
+        besst_keywords = [
+            'financeiro', 'bancos', 'financial', 'banco', 'bank',
+            'energia', 'elétrica', 'utilities', 'electric', 'energy',
+            'saneamento', 'water', 'sanitation', 'básico',
+            'seguro', 'insurance', 'seguradora', 'previdência',
+            'telecomunicações', 'communication', 'telecom', 'telefonia'
+        ]
+        
+        for ticker, data in stocks.items():
+            if ticker.startswith('_'):  # Pular metadados
+                continue
+                
+            if isinstance(data, dict):
+                sector = data.get('sector', '').lower()
+                industry = data.get('industry', '').lower()
+                
+                # Verificar se pertence aos setores BESST
+                is_besst_sector = any(keyword in sector or keyword in industry 
+                                    for keyword in besst_keywords)
+                
+                if is_besst_sector:
+                    besst_tickers.append(ticker)
+        
+        return sorted(besst_tickers)
+    
     def get_database_stats(self) -> Dict[str, Any]:
         """Retorna estatísticas do banco de dados"""
         try:
             if os.path.exists(self.db_file):
                 with open(self.db_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                    stocks = self.load_database()
+                    total_stocks = len([k for k in stocks.keys() if not k.startswith('_')])
+                    besst_count = len(self.get_besst_sector_tickers())
+                    
                     return {
-                        'total_stocks': len(data.get('stocks', {})),
+                        'total_stocks': total_stocks,
+                        'besst_sector_stocks': besst_count,
                         'total_sectors': len(self.get_sectors()),
                         'last_updated': data.get('last_updated', 'N/A'),
                         'cache_valid': self._is_cache_valid(data.get('last_updated'))
@@ -249,6 +285,7 @@ class StockDatabase:
         
         return {
             'total_stocks': 0,
+            'besst_sector_stocks': 0,
             'total_sectors': 0,
             'last_updated': 'N/A',
             'cache_valid': False

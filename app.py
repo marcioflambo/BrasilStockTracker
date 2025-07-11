@@ -127,6 +127,10 @@ def get_stock_name(ticker):
         return info.get('name', ticker.replace('.SA', ''))
     return ticker.replace('.SA', '')
 
+def get_besst_sector_tickers():
+    """Retorna apenas tickers de empresas dos setores BESST"""
+    return stock_db.get_besst_sector_tickers()
+
 def get_popular_stocks():
     # Retorna os primeiros 20 stocks da lista como populares
     return stock_db.get_all_tickers()[:20]
@@ -294,48 +298,53 @@ if st.session_state.show_config:
                 
                 # Mostrar estatísticas do banco de dados
                 total_stocks = len(all_tickers)
+                besst_sector_stocks = get_besst_sector_tickers()
                 st.info(f"📊 **Base de dados**: {total_stocks} ações brasileiras disponíveis\n"
-                       f"⚡ **Otimização**: Analisando subconjunto para melhor performance")
+                       f"🎯 **Setores BESST**: {len(besst_sector_stocks)} empresas dos setores corretos\n"
+                       f"⚡ **Otimização**: Analisando apenas empresas dos setores BESST")
                 
-                # Botão para análise completa
-                if st.button("🔍 Analisar TODA a base de dados (pode demorar)", use_container_width=True):
-                    st.info("⏱️ Analisando todas as ações da base de dados com critérios BESST...")
-                    
-                    # Análise completa em lotes
-                    batch_size = 50
-                    total_batches = (len(all_tickers) + batch_size - 1) // batch_size
-                    all_besst_stocks = []
-                    
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    for i in range(0, len(all_tickers), batch_size):
-                        batch = all_tickers[i:i + batch_size]
-                        batch_num = i // batch_size + 1
+                # Botão para análise completa otimizada
+                if st.button("🔍 Analisar setores BESST completos", use_container_width=True):
+                    if not besst_sector_stocks:
+                        st.warning("Nenhuma empresa dos setores BESST encontrada na base de dados.")
+                    else:
+                        st.info(f"⏱️ Analisando {len(besst_sector_stocks)} empresas dos setores BESST...")
                         
-                        status_text.text(f"Processando lote {batch_num}/{total_batches} ({len(batch)} ações)")
-                        progress_bar.progress(i / len(all_tickers))
+                        # Análise otimizada apenas dos setores BESST
+                        batch_size = 20
+                        total_batches = (len(besst_sector_stocks) + batch_size - 1) // batch_size
+                        all_besst_stocks = []
                         
-                        try:
-                            batch_data = st.session_state.stock_manager.get_stock_data(batch)
-                            if not batch_data.empty:
-                                for _, row in batch_data.iterrows():
-                                    barsi_score = row.get('Critério Barsi', 'N/A')
-                                    if '(' in str(barsi_score):
-                                        try:
-                                            score_text = str(barsi_score).split('(')[1].split(')')[0]
-                                            current_score = int(score_text.split('/')[0])
-                                            if current_score >= 2:  # Pelo menos "Boas"
-                                                all_besst_stocks.append({
-                                                    'ticker': row['Ticker'],
-                                                    'score': current_score,
-                                                    'barsi_full': barsi_score
-                                                })
-                                        except:
-                                            continue
-                        except Exception as e:
-                            st.warning(f"Erro no lote {batch_num}: {e}")
-                            continue
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        for i in range(0, len(besst_sector_stocks), batch_size):
+                            batch = besst_sector_stocks[i:i + batch_size]
+                            batch_num = i // batch_size + 1
+                            
+                            status_text.text(f"Processando lote {batch_num}/{total_batches} ({len(batch)} ações)")
+                            progress_bar.progress(i / len(besst_sector_stocks))
+                            
+                            try:
+                                batch_data = st.session_state.stock_manager.get_stock_data(batch)
+                                if not batch_data.empty:
+                                    for _, row in batch_data.iterrows():
+                                        barsi_score = row.get('Critério Barsi', 'N/A')
+                                        if '(' in str(barsi_score):
+                                            try:
+                                                score_text = str(barsi_score).split('(')[1].split(')')[0]
+                                                current_score = int(score_text.split('/')[0])
+                                                if current_score >= 2:  # Pelo menos "Boas"
+                                                    all_besst_stocks.append({
+                                                        'ticker': row['Ticker'],
+                                                        'score': current_score,
+                                                        'barsi_full': barsi_score
+                                                    })
+                                            except:
+                                                continue
+                            except Exception as e:
+                                st.warning(f"Erro no lote {batch_num}: {e}")
+                                continue
                     
                     progress_bar.progress(1.0)
                     status_text.text("Análise completa!")
@@ -352,7 +361,7 @@ if st.session_state.show_config:
                         
                         col1, col2, col3, col4 = st.columns(4)
                         with col1:
-                            st.metric("Total Analisado", f"{len(all_tickers)}")
+                            st.metric("Empresas Analisadas", f"{len(besst_sector_stocks)}")
                         with col2:
                             st.metric("Boas (2/4)", f"{score_counts.get(2, 0)}")
                         with col3:
@@ -367,7 +376,7 @@ if st.session_state.show_config:
                             for stock in best_stocks[:20]:  # Mostrar top 20
                                 st.write(f"• {stock['ticker']} - {stock['barsi_full']}")
                     else:
-                        st.warning("Nenhuma ação atendeu aos critérios BESST na análise completa.")
+                        st.warning("Nenhuma empresa dos setores BESST atendeu aos critérios completos.")
             current_watched = set(st.session_state.watched_stocks)
             
             # Aplicar filtros base
@@ -382,12 +391,16 @@ if st.session_state.show_config:
             
             # Aplicar filtro Barsi se selecionado
             if apply_barsi_filter:
-                # Usar uma lista menor para melhor performance
+                # Usar apenas empresas dos setores BESST para melhor performance
                 if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
                     st.info("💡 Criando lista inicial com base nos critérios BESST...")
-                    sample_tickers = all_tickers[:50]  # Reduzir drasticamente
+                    sample_tickers = besst_sector_stocks[:30]  # Usar apenas setores BESST
                 else:
-                    sample_tickers = filtered_tickers[:20]  # Limitar ainda mais
+                    # Filtrar apenas setores BESST se não há filtros específicos
+                    if not search_filter and selected_sector == "Todos":
+                        sample_tickers = besst_sector_stocks[:20]
+                    else:
+                        sample_tickers = filtered_tickers[:20]
                 
                 # Mostrar progresso simples
                 with st.spinner(f"Analisando {len(sample_tickers)} ações com critérios BESST..."):
