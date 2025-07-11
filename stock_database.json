@@ -1,0 +1,36 @@
+{
+  "last_updated": "2025-07-11T10:50:14.584508",
+  "stocks": {
+    "PETR4.SA": {
+      "name": "Petrobras",
+      "sector": "Petróleo, Gás e Biocombustíveis",
+      "isin": "BRPETRACNPR6",
+      "link": "https://www.dadosdemercado.com.br/acoes/petr4"
+    },
+    "VALE3.SA": {
+      "name": "Vale",
+      "sector": "Mineração",
+      "isin": "BRVALEACNOR0",
+      "link": "https://www.dadosdemercado.com.br/acoes/vale3"
+    },
+    "ITUB4.SA": {
+      "name": "Itaú Unibanco",
+      "sector": "Bancos",
+      "isin": "BRITUBALCTB2",
+      "link": "https://www.dadosdemercado.com.br/acoes/itub4"
+    },
+    "BBDC4.SA": {
+      "name": "Bradesco",
+      "sector": "Bancos",
+      "isin": "BRBBDCACNPR8",
+      "link": "https://www.dadosdemercado.com.br/acoes/bbdc4"
+    },
+    "ABEV3.SA": {
+      "name": "Ambev",
+      "sector": "Bebidas",
+      "isin": "BRABEVACNOR6",
+      "link": "https://www.dadosdemercado.com.br/acoes/abev3"
+    }
+  },
+  "total_stocks": 5
+}

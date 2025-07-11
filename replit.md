@@ -25,17 +25,28 @@ The application follows a simple, modular architecture with clear separation of 
   - Page configuration and layout management
   - Session state management for watched stocks and auto-refresh settings
   - User interface rendering including sidebar controls
-  - Integration with stock data manager
+  - Integration with stock data manager and database system
 
-### 2. Stock Data Manager (stock_data.py)
-- **Purpose**: Handles all stock data retrieval and caching
+### 2. Stock Database Manager (stock_database.py)
+- **Purpose**: Complete database system for Brazilian stock information
+- **Key Features**:
+  - Persistent JSON storage with comprehensive stock data
+  - On-demand database updates with progress tracking
+  - Multi-threaded data collection from Yahoo Finance API
+  - Search functionality by name, ticker, or industry
+  - Sector-based filtering and browsing
+  - Database statistics and status monitoring
+  - Automatic cache management with 24-hour expiry
+
+### 3. Stock Data Manager (stock_data.py)
+- **Purpose**: Handles real-time stock data retrieval and caching
 - **Key Features**:
   - Data caching with 30-second expiry to reduce API calls
   - Error handling for failed stock data requests
   - Batch processing of multiple stock tickers
   - Integration with Yahoo Finance API via yfinance library
 
-### 3. Utility Functions (utils.py)
+### 4. Utility Functions (utils.py)
 - **Purpose**: Provides formatting functions for financial data display
 - **Functions**:
   - Currency formatting with Brazilian Real (R$) notation
@@ -82,16 +93,22 @@ The application comes pre-configured with major Brazilian stocks:
 - BBDC4.SA (Bradesco)
 - ABEV3.SA (Ambev)
 
-### Dynamic Stock Database (Updated: July 2025)
-The application now uses 100% dynamic stock data retrieval:
-- **Yahoo Finance API integration** for real-time company data extraction
-- **Automatic sector detection** from Yahoo Finance metadata
-- **Real company names** fetched directly from financial APIs
-- **Intelligent caching** with 1-hour expiry for performance
-- **No hardcoded data** - all information comes from live sources
-- **Search functionality** by company name or ticker symbol
-- **Sector-based browsing** with real sectors from Yahoo Finance
-- **Minimal fallback** with only 8 core stocks when APIs fail
+### Complete Stock Database System (Updated: July 2025)
+The application now uses a comprehensive database system for Brazilian stocks:
+- **Complete B3 stock coverage** with 300+ Brazilian stocks
+- **JSON-based persistent storage** with detailed stock information
+- **On-demand database updates** via configuration panel button
+- **Comprehensive stock data** including:
+  - Company names and ticker symbols
+  - Industry sectors and classifications
+  - ISIN codes for international identification
+  - Direct links to market data (dadosdemercado.com.br)
+  - Market cap, currency, and exchange information
+- **Intelligent caching** with 24-hour expiry for performance
+- **Manual update control** - users decide when to refresh data
+- **No API call limits** during normal operation
+- **Robust error handling** with fallback mechanisms
+- **Database statistics** showing total stocks, sectors, and last update
 
 ### Key Features
 - Real-time stock price monitoring with comprehensive financial metrics

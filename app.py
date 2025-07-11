@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from stock_data import StockDataManager
 from utils import format_currency, format_percentage, format_market_cap
-from stock_scraper import get_dynamic_stocks
+from stock_database import stock_db
 from watchlist_manager import WatchlistManager
 from portfolio_manager import PortfolioManager
 
@@ -96,10 +96,9 @@ if 'watchlist_manager' not in st.session_state:
 if 'portfolio_manager' not in st.session_state:
     st.session_state.portfolio_manager = PortfolioManager()
 
-# Carregar lista dinâmica de ações
-if 'dynamic_stocks' not in st.session_state:
-    with st.spinner("Carregando lista de ações brasileiras..."):
-        st.session_state.dynamic_stocks = get_dynamic_stocks()
+# Inicialização do banco de dados de ações
+if 'database_initialized' not in st.session_state:
+    st.session_state.database_initialized = True
 
 # Carregar watchlist persistente
 if 'watched_stocks' not in st.session_state:
@@ -119,42 +118,36 @@ if 'show_barsi_filter' not in st.session_state:
 
 # Funções auxiliares dinâmicas
 def get_all_tickers():
-    return list(st.session_state.dynamic_stocks.keys())
+    return stock_db.get_all_tickers()
 
 def get_sectors():
-    sectors = set()
-    for stock_info in st.session_state.dynamic_stocks.values():
-        sectors.add(stock_info.get('sector', 'Diversos'))
-    return sorted(list(sectors))
+    return stock_db.get_sectors()
 
 def get_tickers_by_sector(sector):
-    tickers = []
-    for ticker, info in st.session_state.dynamic_stocks.items():
-        if info.get('sector') == sector:
-            tickers.append(ticker)
-    return tickers
+    return stock_db.get_tickers_by_sector(sector)
 
 def search_stocks(query):
-    query = query.upper()
     results = []
-    for ticker, info in st.session_state.dynamic_stocks.items():
-        name = info.get('name', '')
-        sector = info.get('sector', 'Diversos')
-        
-        if query in ticker.upper() or query in name.upper():
+    tickers = stock_db.search_stocks(query)
+    for ticker in tickers:
+        info = stock_db.get_stock_info(ticker)
+        if info:
             results.append({
                 'ticker': ticker,
-                'name': name,
-                'sector': sector
+                'name': info.get('name', ticker.replace('.SA', '')),
+                'sector': info.get('sector', 'Diversos')
             })
     return results
 
 def get_stock_name(ticker):
-    return st.session_state.dynamic_stocks.get(ticker, {}).get('name', ticker.replace('.SA', ''))
+    info = stock_db.get_stock_info(ticker)
+    if info:
+        return info.get('name', ticker.replace('.SA', ''))
+    return ticker.replace('.SA', '')
 
 def get_popular_stocks():
     # Retorna os primeiros 20 stocks da lista como populares
-    return list(st.session_state.dynamic_stocks.keys())[:20]
+    return stock_db.get_all_tickers()[:20]
 
 # Header principal com informações do sistema
 col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
@@ -189,12 +182,22 @@ if st.session_state.show_config:
             )
             st.session_state.auto_refresh = auto_refresh
             
-            # Botão para atualizar lista de ações
-            if st.button("🔄 Atualizar Base de Dados", help="Busca nova lista de ações"):
-                with st.spinner("Atualizando..."):
-                    st.session_state.dynamic_stocks = get_dynamic_stocks()
-                    st.success("Base atualizada!")
-                    st.rerun()
+            # Botão para atualizar base de dados completa
+            if st.button("🔄 Atualizar Base de Dados", help="Busca todas as ações da B3 e atualiza informações"):
+                progress_placeholder = st.empty()
+                
+                def update_progress(message):
+                    progress_placeholder.info(message)
+                
+                with st.spinner("Atualizando base de dados completa..."):
+                    success = stock_db.update_database(update_progress)
+                    if success:
+                        st.success("✅ Base de dados atualizada com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Erro ao atualizar base de dados")
+                
+                progress_placeholder.empty()
         
         with col2:
             if st.button("🔄 Atualizar Dados Agora", type="secondary"):
@@ -206,6 +209,34 @@ if st.session_state.show_config:
                 st.session_state.watchlist_manager.save_watchlist([])
                 st.success("Seleções limpas!")
                 st.rerun()
+        
+        st.markdown("---")
+        
+        # Estatísticas da Base de Dados
+        st.subheader("📊 Estatísticas da Base de Dados")
+        stats = stock_db.get_database_stats()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total de Ações", f"{stats['total_stocks']:,}")
+        with col2:
+            st.metric("Setores", f"{stats['total_sectors']:,}")
+        with col3:
+            if stats['last_updated'] != 'N/A':
+                try:
+                    from datetime import datetime
+                    last_update = datetime.fromisoformat(stats['last_updated'])
+                    formatted_date = last_update.strftime("%d/%m/%Y %H:%M")
+                    st.metric("Última Atualização", formatted_date)
+                except:
+                    st.metric("Última Atualização", "Erro na data")
+            else:
+                st.metric("Última Atualização", "N/A")
+        with col4:
+            if stats['cache_valid']:
+                st.metric("Status", "✅ Atualizada")
+            else:
+                st.metric("Status", "⚠️ Desatualizada")
         
         st.markdown("---")
         
