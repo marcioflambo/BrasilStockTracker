@@ -305,52 +305,65 @@ if st.session_state.show_config:
             
             # Aplicar filtro Barsi se selecionado
             if apply_barsi_filter:
-                with st.spinner("Aplicando filtro Barsi..."):
-                    barsi_filtered = []
-                    
-                    # Se não há lista de monitoramento e não há outros filtros, criar sugestão inicial
-                    if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
-                        st.info("💡 Criando lista inicial com base nos critérios Barsi...")
-                        # Usar uma amostra maior para encontrar boas ações
-                        sample_tickers = all_tickers[:200]
-                    else:
-                        sample_tickers = filtered_tickers[:50]  # Limitar para performance
-                    
-                    stock_data = st.session_state.stock_manager.get_stock_data(sample_tickers)
-                    
-                    for _, row in stock_data.iterrows():
-                        barsi_score = row.get('Critério Barsi', 'N/A')
+                # Usar uma lista menor para melhor performance
+                if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
+                    st.info("💡 Criando lista inicial com base nos critérios Barsi...")
+                    sample_tickers = all_tickers[:50]  # Reduzir drasticamente
+                else:
+                    sample_tickers = filtered_tickers[:20]  # Limitar ainda mais
+                
+                # Mostrar progresso simples
+                with st.spinner(f"Analisando {len(sample_tickers)} ações com critérios Barsi..."):
+                    try:
+                        # Buscar dados das ações
+                        stock_data = st.session_state.stock_manager.get_stock_data(sample_tickers)
                         
-                        # Extrair pontuação numérica
-                        if '(' in barsi_score:
-                            try:
-                                score_text = barsi_score.split('(')[1].split(')')[0]
-                                current_score = int(score_text.split('/')[0])
+                        barsi_filtered = []
+                        
+                        if not stock_data.empty:
+                            for _, row in stock_data.iterrows():
+                                barsi_score = row.get('Critério Barsi', 'N/A')
                                 
-                                # Aplicar critério de pontuação mínima
-                                if barsi_minimum_score == "Todas":
-                                    barsi_filtered.append(row['Ticker'])
-                                elif barsi_minimum_score == "Boas (2/4)" and current_score >= 2:
-                                    barsi_filtered.append(row['Ticker'])
-                                elif barsi_minimum_score == "Excelentes (3/4)" and current_score >= 3:
-                                    barsi_filtered.append(row['Ticker'])
-                            except:
-                                pass
-                    
-                    filtered_tickers = barsi_filtered
-                    
-                    # Mensagem específica baseada no contexto
-                    if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
-                        st.success(f"✅ {len(filtered_tickers)} ações encontradas que atendem aos critérios Barsi para sua lista inicial")
-                    else:
-                        filter_context = []
-                        if search_filter:
-                            filter_context.append(f"busca '{search_filter}'")
-                        if selected_sector != "Todos":
-                            filter_context.append(f"setor '{selected_sector}'")
+                                # Extrair pontuação numérica
+                                if '(' in str(barsi_score):
+                                    try:
+                                        score_text = str(barsi_score).split('(')[1].split(')')[0]
+                                        current_score = int(score_text.split('/')[0])
+                                        
+                                        # Aplicar critério de pontuação mínima
+                                        if barsi_minimum_score == "Todas":
+                                            barsi_filtered.append(row['Ticker'])
+                                        elif barsi_minimum_score == "Boas (2/4)" and current_score >= 2:
+                                            barsi_filtered.append(row['Ticker'])
+                                        elif barsi_minimum_score == "Excelentes (3/4)" and current_score >= 3:
+                                            barsi_filtered.append(row['Ticker'])
+                                    except:
+                                        continue
                         
-                        context_text = " + ".join(filter_context) if filter_context else "filtros aplicados"
-                        st.success(f"✅ {len(filtered_tickers)} ações atendem aos critérios Barsi + {context_text}")
+                        filtered_tickers = barsi_filtered
+                        
+                        # Mensagem específica baseada no contexto
+                        if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
+                            st.success(f"✅ {len(filtered_tickers)} ações encontradas que atendem aos critérios Barsi")
+                        else:
+                            filter_context = []
+                            if search_filter:
+                                filter_context.append(f"busca '{search_filter}'")
+                            if selected_sector != "Todos":
+                                filter_context.append(f"setor '{selected_sector}'")
+                            
+                            context_text = " + ".join(filter_context) if filter_context else "filtros aplicados"
+                            st.success(f"✅ {len(filtered_tickers)} ações atendem aos critérios Barsi + {context_text}")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Erro ao aplicar filtro Barsi: {str(e)}")
+                        # Usar lista padrão em caso de erro
+                        filtered_tickers = all_tickers[:20]
+                
+                # Se não encontrou nenhuma ação, usar lista padrão
+                if not filtered_tickers:
+                    st.warning("⚠️ Nenhuma ação encontrada com os critérios Barsi. Mostrando lista padrão.")
+                    filtered_tickers = all_tickers[:20]
             
             # Botões de seleção rápida
             col1, col2, col3 = st.columns(3)
