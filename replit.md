@@ -82,10 +82,23 @@ The application comes pre-configured with major Brazilian stocks:
 - BBDC4.SA (Bradesco)
 - ABEV3.SA (Ambev)
 
+### Enhanced Stock Database (Updated: January 2025)
+The application now includes a comprehensive database of Brazilian stocks:
+- **80+ stocks** across multiple sectors
+- **13 major sectors** including Banks, Energy, Mining, Retail, Technology
+- **Search functionality** by company name or ticker symbol
+- **Sector-based browsing** for easy stock discovery
+- **Popular stocks** quick-add feature for most traded stocks
+
 ### Key Features
-- Real-time stock price monitoring
-- Automatic refresh capability
-- Dynamic watchlist management
-- Brazilian currency formatting
+- Real-time stock price monitoring with comprehensive financial metrics
+- Automatic refresh capability every 2 seconds
+- Dynamic watchlist management with multiple addition methods:
+  - Search by name or ticker
+  - Browse by sector
+  - Quick-add popular stocks
+  - Manual ticker entry
+- Brazilian currency formatting with smart scaling (K, M, B, T)
 - Error handling for unavailable stocks
-- Responsive web interface
+- Responsive web interface with tabbed navigation
+- Database statistics display (total stocks and sectors available)

@@ -4,6 +4,10 @@ import time
 from datetime import datetime
 from stock_data import StockDataManager
 from utils import format_currency, format_percentage, format_market_cap
+from brazilian_stocks import (
+    get_all_tickers, get_tickers_by_sector, get_sectors, 
+    search_stocks, get_stock_name, POPULAR_STOCKS, BRAZILIAN_STOCKS
+)
 
 # Configuração da página
 st.set_page_config(
@@ -34,6 +38,17 @@ st.markdown("---")
 with st.sidebar:
     st.header("⚙️ Controles")
     
+    # Mostrar estatísticas das ações disponíveis
+    total_stocks = len(get_all_tickers())
+    total_sectors = len(get_sectors())
+    
+    st.info(f"""
+    📊 **Base de Dados**
+    - {total_stocks} ações disponíveis
+    - {total_sectors} setores diferentes
+    - Dados em tempo real via Yahoo Finance
+    """)
+    
     # Controle de auto-refresh
     auto_refresh = st.checkbox(
         "🔄 Atualização automática (2s)", 
@@ -46,6 +61,84 @@ with st.sidebar:
     
     # Adicionar nova ação
     st.subheader("➕ Adicionar Ação")
+    
+    # Tabs para diferentes formas de adicionar
+    tab1, tab2, tab3 = st.tabs(["🔍 Buscar", "📊 Por Setor", "⭐ Populares"])
+    
+    with tab1:
+        search_query = st.text_input(
+            "Buscar por nome ou código:",
+            placeholder="Ex: Itaú, PETR4, Petrobras..."
+        )
+        
+        if search_query and len(search_query) >= 2:
+            results = search_stocks(search_query)
+            if results:
+                st.write("**Resultados encontrados:**")
+                for result in results[:10]:  # Limitar a 10 resultados
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"**{result['ticker']}** - {result['name']}")
+                        st.caption(f"Setor: {result['sector']}")
+                    with col2:
+                        if st.button("➕", key=f"add_{result['ticker']}", 
+                                   help=f"Adicionar {result['ticker']}"):
+                            if result['ticker'] not in st.session_state.watched_stocks:
+                                st.session_state.watched_stocks.append(result['ticker'])
+                                st.success(f"✅ {result['ticker']} adicionada!")
+                                st.rerun()
+            else:
+                st.info("Nenhuma ação encontrada com esse termo")
+    
+    with tab2:
+        selected_sector = st.selectbox(
+            "Escolha um setor:",
+            options=["Selecione..."] + get_sectors()
+        )
+        
+        if selected_sector != "Selecione...":
+            sector_stocks = get_tickers_by_sector(selected_sector)
+            st.write(f"**Ações do setor {selected_sector}:**")
+            
+            for ticker in sector_stocks:
+                if ticker in BRAZILIAN_STOCKS[selected_sector]:
+                    name = BRAZILIAN_STOCKS[selected_sector][ticker]
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"**{ticker}** - {name}")
+                    with col2:
+                        if st.button("➕", key=f"sector_add_{ticker}", 
+                                   help=f"Adicionar {ticker}"):
+                            if ticker not in st.session_state.watched_stocks:
+                                st.session_state.watched_stocks.append(ticker)
+                                st.success(f"✅ {ticker} adicionada!")
+                                st.rerun()
+    
+    with tab3:
+        st.write("**Ações mais populares:**")
+        
+        # Mostrar em grade de 2 colunas
+        for i in range(0, len(POPULAR_STOCKS), 2):
+            col1, col2 = st.columns(2)
+            
+            for j, col in enumerate([col1, col2]):
+                if i + j < len(POPULAR_STOCKS):
+                    ticker = POPULAR_STOCKS[i + j]
+                    name = get_stock_name(ticker)
+                    
+                    with col:
+                        if st.button(f"{ticker}\n{name}", 
+                                   key=f"popular_{ticker}",
+                                   use_container_width=True):
+                            if ticker not in st.session_state.watched_stocks:
+                                st.session_state.watched_stocks.append(ticker)
+                                st.success(f"✅ {ticker} adicionada!")
+                                st.rerun()
+    
+    st.markdown("---")
+    
+    # Adicionar manualmente (método original)
+    st.subheader("✍️ Adicionar Manualmente")
     new_stock = st.text_input(
         "Código da ação (ex: ITUB4.SA):",
         placeholder="Digite o ticker..."
