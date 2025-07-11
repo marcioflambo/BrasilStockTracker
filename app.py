@@ -15,6 +15,76 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# CSS customizado para melhorar o visual
+st.markdown("""
+<style>
+    /* Melhorar header */
+    .main > div {
+        padding-top: 2rem;
+    }
+    
+    /* Customizar métricas */
+    [data-testid="metric-container"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 1rem;
+        border-radius: 10px;
+        color: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    [data-testid="metric-container"] > div {
+        color: white;
+    }
+    
+    /* Melhorar sidebar */
+    .css-1d391kg {
+        background: #f8f9fa;
+    }
+    
+    /* Botões customizados */
+    .stButton > button {
+        border-radius: 8px;
+        border: none;
+        transition: all 0.3s;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    /* Tabela de dados */
+    .stDataFrame {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: #f1f3f4;
+        border-radius: 8px;
+    }
+    
+    /* Inputs */
+    .stTextInput > div > div > input {
+        border-radius: 8px;
+        border: 2px solid #e1e5e9;
+    }
+    
+    .stSelectbox > div > div > select {
+        border-radius: 8px;
+        border: 2px solid #e1e5e9;
+    }
+    
+    /* Alertas */
+    .stAlert {
+        border-radius: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Inicialização do gerenciador de dados
 if 'stock_manager' not in st.session_state:
     st.session_state.stock_manager = StockDataManager()
@@ -76,167 +146,173 @@ def get_popular_stocks():
     # Retorna os primeiros 20 stocks da lista como populares
     return list(st.session_state.dynamic_stocks.keys())[:20]
 
-# Título principal
-st.title("📈 Monitor de Ações Brasileiras")
-st.markdown("---")
-
-# Sidebar para controles
-with st.sidebar:
-    st.header("⚙️ Controles")
-    
-    # Mostrar estatísticas das ações disponíveis
+# Header principal com informações do sistema
+col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+with col1:
+    st.title("📈 Monitor de Ações Brasileiras")
+with col2:
     total_stocks = len(get_all_tickers())
-    total_sectors = len(get_sectors())
-    
-    st.info(f"""
-    📊 **Base de Dados**
-    - {total_stocks} ações disponíveis
-    - {total_sectors} setores diferentes
-    - Dados em tempo real via Yahoo Finance
-    """)
-    
-    # Botão para atualizar lista de ações
-    if st.button("🔄 Atualizar Lista de Ações", help="Busca nova lista atualizada de ações brasileiras"):
-        with st.spinner("Atualizando lista de ações..."):
-            st.session_state.dynamic_stocks = get_dynamic_stocks()
-            st.success("Lista atualizada com sucesso!")
-            st.rerun()
-    
-    # Controle de auto-refresh
-    auto_refresh = st.checkbox(
-        "🔄 Atualização automática (2s)", 
-        value=st.session_state.auto_refresh,
-        help="Ativa a atualização automática dos dados a cada 2 segundos"
-    )
-    st.session_state.auto_refresh = auto_refresh
-    
-    st.markdown("---")
-    
-    # Seletor de ações
-    st.subheader("📋 Selecionar Ações para Monitoramento")
-    
-    # Criar listas ordenadas
-    all_tickers = sorted(get_all_tickers())
-    current_watched = set(st.session_state.watched_stocks)
-    
-    # Filtro de busca
-    search_filter = st.text_input(
-        "🔍 Filtrar ações (digite para buscar):",
-        placeholder="Ex: Itaú, PETR4, Petrobras, Bancos...",
-        key="stock_filter"
-    )
-    
-    # Filtrar lista baseado na busca
-    if search_filter:
-        filtered_results = search_stocks(search_filter)
-        filtered_tickers = [r['ticker'] for r in filtered_results]
-    else:
-        filtered_tickers = all_tickers
-    
-    # Controles de seleção rápida
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("✅ Selecionar Visíveis", use_container_width=True):
-            new_selections = current_watched.union(set(filtered_tickers))
-            st.session_state.watched_stocks = list(new_selections)
-            st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
-            st.success(f"✅ {len(filtered_tickers)} ações adicionadas!")
-            st.rerun()
-    
-    with col2:
-        if st.button("❌ Desmarcar Visíveis", use_container_width=True):
-            new_selections = current_watched - set(filtered_tickers)
-            st.session_state.watched_stocks = list(new_selections)
-            st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
-            st.success(f"✅ {len(filtered_tickers)} ações removidas!")
-            st.rerun()
-    
-    with col3:
-        if st.button("🔄 Limpar Tudo", use_container_width=True):
-            st.session_state.watched_stocks = []
-            st.session_state.watchlist_manager.save_watchlist([])
-            st.success("✅ Lista limpa!")
-            st.rerun()
-    
-    st.markdown("---")
-    
-    # Container scrollável com checkboxes
-    st.write(f"**📊 Ações Disponíveis ({len(filtered_tickers)} de {len(all_tickers)}):**")
-    
-    # Agrupar por setor se não estiver filtrando
-    if not search_filter:
-        # Mostrar por setor
-        sectors = get_sectors()
-        selected_sector_filter = st.selectbox(
-            "Filtrar por setor:",
-            options=["Todos os setores"] + sectors,
-            key="sector_filter"
-        )
+    st.metric("Ações Disponíveis", total_stocks)
+with col3:
+    st.metric("Monitoradas", len(st.session_state.watched_stocks))
+with col4:
+    # Botão de configurações
+    if st.button("⚙️ Configurar", use_container_width=True):
+        st.session_state.show_config = not st.session_state.get('show_config', False)
+
+# Inicializar estado de configuração
+if 'show_config' not in st.session_state:
+    st.session_state.show_config = False
+
+# Painel de configuração expansível
+if st.session_state.show_config:
+    with st.expander("⚙️ Configurações", expanded=True):
+        # Controles principais
+        col1, col2 = st.columns(2)
         
-        if selected_sector_filter != "Todos os setores":
-            filtered_tickers = get_tickers_by_sector(selected_sector_filter)
-    
-    # Mostrar checkboxes em container scrollável
-    with st.container():
-        # Limitar a 50 ações por vez para performance
-        display_tickers = filtered_tickers[:50]
-        if len(filtered_tickers) > 50:
-            st.info(f"Mostrando primeiras 50 de {len(filtered_tickers)} ações. Use o filtro para refinar a busca.")
-        
-        # Checkbox para cada ação
-        changes_made = False
-        new_watched_set = current_watched.copy()
-        
-        # Usar formulário para processar mudanças em lote
-        with st.form("stock_selection_form"):
-            for ticker in display_tickers:
-                name = get_stock_name(ticker)
-                sector = st.session_state.dynamic_stocks.get(ticker, {}).get('sector', 'N/A')
-                
-                # Checkbox para cada ação
-                is_selected = st.checkbox(
-                    f"**{ticker}** - {name}",
-                    value=ticker in current_watched,
-                    key=f"checkbox_{ticker}",
-                    help=f"Setor: {sector}"
-                )
-                
-                # Atualizar conjunto baseado na seleção
-                if is_selected and ticker not in current_watched:
-                    new_watched_set.add(ticker)
-                    changes_made = True
-                elif not is_selected and ticker in current_watched:
-                    new_watched_set.discard(ticker)
-                    changes_made = True
+        with col1:
+            # Auto-refresh
+            auto_refresh = st.checkbox(
+                "Atualização automática (2s)", 
+                value=st.session_state.auto_refresh,
+                help="Ativa a atualização automática dos dados"
+            )
+            st.session_state.auto_refresh = auto_refresh
             
-            # Botão para aplicar mudanças
-            if st.form_submit_button("💾 Salvar Seleções", type="primary"):
-                st.session_state.watched_stocks = list(new_watched_set)
-                st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
-                st.success(f"✅ Watchlist atualizada! {len(st.session_state.watched_stocks)} ações selecionadas.")
-                st.rerun()
-    
-    st.markdown("---")
-    
-    # Resumo da seleção atual
-    st.subheader("📊 Ações Selecionadas")
-    if st.session_state.watched_stocks:
-        st.info(f"📈 **{len(st.session_state.watched_stocks)} ações** sendo monitoradas")
+            # Botão para atualizar lista de ações
+            if st.button("🔄 Atualizar Base de Dados", help="Busca nova lista de ações"):
+                with st.spinner("Atualizando..."):
+                    st.session_state.dynamic_stocks = get_dynamic_stocks()
+                    st.success("Base atualizada!")
+                    st.rerun()
         
-        # Mostrar ações em chips/tags
-        if len(st.session_state.watched_stocks) <= 10:
-            for stock in st.session_state.watched_stocks:
-                st.caption(f"• {stock} - {get_stock_name(stock)}")
+        with col2:
+            if st.button("🔄 Atualizar Dados Agora", type="secondary"):
+                st.session_state.last_update = None
+                st.rerun()
+            
+            if st.button("❌ Limpar Seleções"):
+                st.session_state.watched_stocks = []
+                st.session_state.watchlist_manager.save_watchlist([])
+                st.success("Seleções limpas!")
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # Seleção de ações simplificada
+        st.subheader("Selecionar Ações")
+        
+        # Criar listas ordenadas
+        all_tickers = sorted(get_all_tickers())
+        current_watched = set(st.session_state.watched_stocks)
+        
+        # Filtros em linha
+        col1, col2 = st.columns(2)
+        with col1:
+            search_filter = st.text_input(
+                "Buscar ações:",
+                placeholder="Ex: Itaú, PETR4, Bancos...",
+                key="stock_filter"
+            )
+        
+        with col2:
+            sectors = get_sectors()
+            selected_sector = st.selectbox(
+                "Filtrar por setor:",
+                options=["Todos"] + sectors,
+                key="sector_filter"
+            )
+        
+        # Filtrar lista
+        if search_filter:
+            filtered_results = search_stocks(search_filter)
+            filtered_tickers = [r['ticker'] for r in filtered_results]
+        elif selected_sector != "Todos":
+            filtered_tickers = get_tickers_by_sector(selected_sector)
         else:
-            st.caption(f"• {', '.join(st.session_state.watched_stocks[:5])} e mais {len(st.session_state.watched_stocks)-5} ações...")
-    else:
-        st.warning("⚠️ Nenhuma ação selecionada para monitoramento")
+            filtered_tickers = all_tickers[:30]  # Limitar para performance
+        
+        # Botões de seleção rápida
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Selecionar Filtradas", use_container_width=True):
+                new_selections = current_watched.union(set(filtered_tickers))
+                st.session_state.watched_stocks = list(new_selections)
+                st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
+                st.success(f"{len(filtered_tickers)} ações adicionadas!")
+                st.rerun()
+        
+        with col2:
+            if st.button("❌ Desmarcar Filtradas", use_container_width=True):
+                new_selections = current_watched - set(filtered_tickers)
+                st.session_state.watched_stocks = list(new_selections)
+                st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
+                st.success(f"{len(filtered_tickers)} ações removidas!")
+                st.rerun()
+        
+        # Lista de seleção compacta
+        if filtered_tickers:
+            st.write(f"**Ações ({len(filtered_tickers)}):**")
+            
+            with st.form("quick_selection"):
+                # Organizar em colunas para economizar espaço
+                cols = st.columns(3)
+                new_watched_set = current_watched.copy()
+                
+                for i, ticker in enumerate(filtered_tickers[:30]):  # Limitar a 30
+                    col_idx = i % 3
+                    name = get_stock_name(ticker)
+                    
+                    with cols[col_idx]:
+                        is_selected = st.checkbox(
+                            f"{ticker}",
+                            value=ticker in current_watched,
+                            key=f"cb_{ticker}",
+                            help=f"{name}"
+                        )
+                        
+                        if is_selected:
+                            new_watched_set.add(ticker)
+                        else:
+                            new_watched_set.discard(ticker)
+                
+                if st.form_submit_button("💾 Salvar Seleções", type="primary"):
+                    st.session_state.watched_stocks = list(new_watched_set)
+                    st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
+                    st.success(f"Watchlist atualizada! {len(st.session_state.watched_stocks)} ações.")
+                    st.rerun()
+
+# Sidebar compacta
+with st.sidebar:
+    st.header("Status")
     
-    # Botão de atualização manual
+    # Status do auto-refresh
+    if st.session_state.auto_refresh:
+        st.success("🟢 Auto-refresh ativo")
+    else:
+        st.info("⏸️ Auto-refresh pausado")
+    
+    # Última atualização
+    if st.session_state.last_update:
+        update_time = datetime.fromtimestamp(st.session_state.last_update).strftime("%H:%M:%S")
+        st.caption(f"Última atualização: {update_time}")
+    
     st.markdown("---")
-    if st.button("🔄 Atualizar Dados", type="secondary", use_container_width=True):
-        st.session_state.last_update = None
-        st.rerun()
+    
+    # Lista compacta de ações selecionadas
+    if st.session_state.watched_stocks:
+        st.subheader(f"Monitoradas ({len(st.session_state.watched_stocks)})")
+        
+        # Mostrar apenas algumas com scroll
+        for stock in st.session_state.watched_stocks[:8]:
+            name = get_stock_name(stock)
+            st.caption(f"• {stock}")
+        
+        if len(st.session_state.watched_stocks) > 8:
+            st.caption(f"... e mais {len(st.session_state.watched_stocks) - 8} ações")
+    else:
+        st.warning("Nenhuma ação selecionada")
+        st.caption("Use ⚙️ Configurar para selecionar ações")
 
 # Área principal
 if st.session_state.watched_stocks:
@@ -268,82 +344,84 @@ if st.session_state.watched_stocks:
     if 'stock_data' in st.session_state and not st.session_state.stock_data.empty:
         status_placeholder.empty()
         
-        # Informações de status
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("📊 Ações Monitoradas", len(st.session_state.watched_stocks))
-        with col2:
-            if st.session_state.last_update:
-                update_time = datetime.fromtimestamp(st.session_state.last_update).strftime("%H:%M:%S")
-                st.metric("🕐 Última Atualização", update_time)
-        with col3:
-            status_text = "🔄 Ativo" if auto_refresh else "⏸️ Pausado"
-            st.metric("🔄 Auto-refresh", status_text)
+        # Tabela de dados com título clean
+        st.subheader("💹 Dashboard de Ações")
         
-        st.markdown("---")
+        # Preparar dados para exibição
+        display_df = st.session_state.stock_data.copy()
         
-        # Tabela de dados
-        with table_container:
-            st.subheader("💹 Dados das Ações")
-            
-            # Preparar dados para exibição
-            display_df = st.session_state.stock_data.copy()
-            
-            # Formatação dos dados para exibição
-            format_columns = {
-                'Preço Atual': lambda x: format_currency(x) if x != 'N/A' else 'N/A',
-                'Variação (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-                'DY Atual (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-                'DY Médio 5a (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-                'P/L': lambda x: f"{x:.2f}" if x != 'N/A' else 'N/A',
-                'P/VP': lambda x: f"{x:.2f}" if x != 'N/A' else 'N/A',
-                'Margem Líq. (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
-                'Valor de Mercado': lambda x: format_market_cap(x) if x != 'N/A' else 'N/A'
-            }
-            
-            # Aplicar formatação
-            formatted_df = display_df.copy()
-            for col, formatter in format_columns.items():
-                if col in formatted_df.columns:
-                    formatted_df[col] = formatted_df[col].apply(formatter)
-            
-            # Exibir tabela
-            st.dataframe(
-                formatted_df,
-                use_container_width=True,
-                height=400,
-                column_config={
-                    "Ticker": st.column_config.TextColumn("Código", width="small"),
-                    "Nome": st.column_config.TextColumn("Nome da Empresa", width="medium"),
-                    "Preço Atual": st.column_config.TextColumn("Preço Atual", width="small"),
-                    "Variação (%)": st.column_config.TextColumn("Variação (%)", width="small"),
-                    "DY Atual (%)": st.column_config.TextColumn("DY Atual", width="small"),
-                    "DY Médio 5a (%)": st.column_config.TextColumn("DY Médio 5a", width="small"),
-                    "P/L": st.column_config.TextColumn("P/L", width="small"),
-                    "P/VP": st.column_config.TextColumn("P/VP", width="small"),
-                    "Margem Líq. (%)": st.column_config.TextColumn("Margem Líq.", width="small"),
-                    "Valor de Mercado": st.column_config.TextColumn("Valor de Mercado", width="medium"),
-                    "Setor": st.column_config.TextColumn("Setor", width="medium")
-                }
-            )
+        # Formatação dos dados para exibição
+        format_columns = {
+            'Preço Atual': lambda x: format_currency(x) if x != 'N/A' else 'N/A',
+            'Variação (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
+            'DY Atual (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
+            'DY Médio 5a (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
+            'P/L': lambda x: f"{x:.2f}" if x != 'N/A' else 'N/A',
+            'P/VP': lambda x: f"{x:.2f}" if x != 'N/A' else 'N/A',
+            'Margem Líq. (%)': lambda x: format_percentage(x) if x != 'N/A' else 'N/A',
+            'Valor de Mercado': lambda x: format_market_cap(x) if x != 'N/A' else 'N/A'
+        }
+        
+        # Aplicar formatação
+        formatted_df = display_df.copy()
+        for col, formatter in format_columns.items():
+            if col in formatted_df.columns:
+                formatted_df[col] = formatted_df[col].apply(formatter)
+        
+        # Exibir tabela com configuração otimizada
+        st.dataframe(
+            formatted_df,
+            use_container_width=True,
+            height=500,
+            column_config={
+                "Ticker": st.column_config.TextColumn("Código", width="small"),
+                "Nome": st.column_config.TextColumn("Empresa", width="medium"),
+                "Preço Atual": st.column_config.TextColumn("Preço", width="small"),
+                "Variação (%)": st.column_config.TextColumn("Var. %", width="small"),
+                "DY Atual (%)": st.column_config.TextColumn("DY Atual", width="small"),
+                "DY Médio 5a (%)": st.column_config.TextColumn("DY 5a", width="small"),
+                "P/L": st.column_config.TextColumn("P/L", width="small"),
+                "P/VP": st.column_config.TextColumn("P/VP", width="small"),
+                "Margem Líq. (%)": st.column_config.TextColumn("Margem", width="small"),
+                "Valor de Mercado": st.column_config.TextColumn("Valor Mercado", width="medium"),
+                "Setor": st.column_config.TextColumn("Setor", width="medium")
+            },
+            hide_index=True
+        )
     else:
         status_placeholder.error("❌ Erro ao carregar dados das ações")
 
 else:
-    st.info("📝 Adicione algumas ações na barra lateral para começar o monitoramento")
+    # Tela inicial quando não há ações selecionadas
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.info("🚀 **Bem-vindo ao Monitor de Ações!**")
+        st.markdown("""
+        **Para começar:**
+        1. Clique em **⚙️ Configurar** acima
+        2. Selecione as ações que deseja monitorar
+        3. Volte aqui para ver os dados em tempo real!
+        """)
+        
+        if st.button("⚙️ Configurar Ações", type="primary", use_container_width=True):
+            st.session_state.show_config = True
+            st.rerun()
 
 # Auto-refresh logic
-if auto_refresh:
+if st.session_state.auto_refresh:
     time.sleep(0.1)  # Pequena pausa para evitar refresh muito agressivo
     st.rerun()
 
-# Rodapé
-st.markdown("---")
-st.markdown(
-    """
-    <div style='text-align: center; color: #666; font-size: 12px;'>
-    💡 Dados fornecidos pelo Yahoo Finance | Atualização em tempo real a cada 2 segundos
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# Rodapé simplificado
+st.markdown("<br><br>", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    st.markdown(
+        """
+        <div style='text-align: center; color: #888; font-size: 11px; padding: 20px;'>
+        📊 Dados: Yahoo Finance | 🔄 Atualização: Tempo real | 🚀 Powered by Streamlit
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
