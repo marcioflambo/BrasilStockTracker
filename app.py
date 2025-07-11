@@ -152,17 +152,45 @@ if 'show_config' not in st.session_state:
 # Painel de configuração expansível
 if st.session_state.show_config:
     with st.expander("⚙️ Configurações", expanded=True):
-        # Controles principais
-        col1, col2 = st.columns(2)
+        # Criar tabs organizadas
+        tab1, tab2, tab3, tab4 = st.tabs(["🔧 Controles", "📊 Base de Dados", "🎯 Filtros", "📋 Seleção"])
         
-        with col1:
-            # Auto-refresh
-            auto_refresh = st.checkbox(
-                "Atualização automática (2s)", 
-                value=st.session_state.auto_refresh,
-                help="Ativa a atualização automática dos dados"
-            )
-            st.session_state.auto_refresh = auto_refresh
+        with tab1:
+            st.subheader("Controles da Aplicação")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Auto-refresh
+                auto_refresh = st.checkbox(
+                    "Atualização automática (2s)", 
+                    value=st.session_state.auto_refresh,
+                    help="Ativa a atualização automática dos dados"
+                )
+                st.session_state.auto_refresh = auto_refresh
+                
+                if st.button("🔄 Atualizar Dados Agora", type="secondary"):
+                    st.session_state.last_update = None
+                    st.rerun()
+            
+            with col2:
+                if st.button("❌ Limpar Seleções"):
+                    st.session_state.watched_stocks = []
+                    st.success("Seleções limpas!")
+                    st.rerun()
+                
+                if st.button("⭐ Adicionar Populares"):
+                    popular = get_popular_stocks()[:10]
+                    current = set(st.session_state.watched_stocks)
+                    new_stocks = [stock for stock in popular if stock not in current]
+                    if new_stocks:
+                        st.session_state.watched_stocks.extend(new_stocks[:5])
+                        st.success(f"✅ {len(new_stocks[:5])} ações populares adicionadas!")
+                        st.rerun()
+                    else:
+                        st.info("Todas as ações populares já estão na lista!")
+        
+        with tab2:
+            st.subheader("Gerenciamento da Base de Dados")
             
             # Botão para atualizar base de dados completa
             if st.button("🔄 Atualizar Base de Dados", help="Busca todas as ações da B3 e atualiza informações"):
@@ -180,126 +208,175 @@ if st.session_state.show_config:
                         st.error("❌ Erro ao atualizar base de dados")
                 
                 progress_placeholder.empty()
-        
-        with col2:
-            if st.button("🔄 Atualizar Dados Agora", type="secondary"):
-                st.session_state.last_update = None
-                st.rerun()
             
-            if st.button("❌ Limpar Seleções"):
-                st.session_state.watched_stocks = []
-                st.success("Seleções limpas!")
-                st.rerun()
-        
-        st.markdown("---")
-        
-        # Estatísticas da Base de Dados
-        st.subheader("📊 Estatísticas da Base de Dados")
-        stats = stock_db.get_database_stats()
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total de Ações", f"{stats['total_stocks']:,}")
-        with col2:
-            st.metric("Setores", f"{stats['total_sectors']:,}")
-        with col3:
-            if stats['last_updated'] != 'N/A':
-                try:
-                    from datetime import datetime
-                    last_update = datetime.fromisoformat(stats['last_updated'])
-                    formatted_date = last_update.strftime("%d/%m/%Y %H:%M")
-                    st.metric("Última Atualização", formatted_date)
-                except:
-                    st.metric("Última Atualização", "Erro na data")
-            else:
-                st.metric("Última Atualização", "N/A")
-        with col4:
-            if stats['cache_valid']:
-                st.metric("Status", "✅ Atualizada")
-            else:
-                st.metric("Status", "⚠️ Desatualizada")
-        
-        st.markdown("---")
-        
-        # Tab única para seleção de ações
-        st.subheader("📋 Seleção de Ações para Monitoramento")
-        
-        # Criar listas ordenadas
-        all_tickers = sorted(get_all_tickers())
-        current_watched = set(st.session_state.watched_stocks)
-        
-        # Filtros em linha
-        col1, col2 = st.columns(2)
-        with col1:
-            search_filter = st.text_input(
-                "Buscar ações:",
-                placeholder="Ex: Itaú, PETR4, Bancos...",
-                key="stock_filter"
-            )
-        
-        with col2:
-            sectors = get_sectors()
-            selected_sector = st.selectbox(
-                "Filtrar por setor:",
-                options=["Todos"] + sectors,
-                key="sector_filter"
-            )
-        
-        # Filtrar lista
-        if search_filter:
-            filtered_results = search_stocks(search_filter)
-            filtered_tickers = [r['ticker'] for r in filtered_results]
-        elif selected_sector != "Todos":
-            filtered_tickers = get_tickers_by_sector(selected_sector)
-        else:
-            filtered_tickers = all_tickers[:30]  # Limitar para performance
-        
-        # Botões de seleção rápida
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✅ Selecionar Filtradas", use_container_width=True):
-                new_selections = current_watched.union(set(filtered_tickers))
-                st.session_state.watched_stocks = list(new_selections)
-                st.success(f"{len(filtered_tickers)} ações adicionadas!")
-                st.rerun()
-        
-        with col2:
-            if st.button("❌ Desmarcar Filtradas", use_container_width=True):
-                new_selections = current_watched - set(filtered_tickers)
-                st.session_state.watched_stocks = list(new_selections)
-                st.success(f"{len(filtered_tickers)} ações removidas!")
-                st.rerun()
-        
-        # Lista de seleção compacta
-        if filtered_tickers:
-            st.write(f"**Ações ({len(filtered_tickers)}):**")
+            st.markdown("---")
             
-            with st.form("quick_selection"):
-                # Organizar em colunas para economizar espaço
-                cols = st.columns(3)
-                new_watched_set = current_watched.copy()
-                
-                for i, ticker in enumerate(filtered_tickers[:30]):  # Limitar a 30
-                    col_idx = i % 3
-                    name = get_stock_name(ticker)
+            # Estatísticas da Base de Dados
+            st.subheader("📊 Estatísticas")
+            stats = stock_db.get_database_stats()
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total de Ações", f"{stats['total_stocks']:,}")
+            with col2:
+                st.metric("Setores", f"{stats['total_sectors']:,}")
+            with col3:
+                if stats['last_updated'] != 'N/A':
+                    try:
+                        from datetime import datetime
+                        last_update = datetime.fromisoformat(stats['last_updated'])
+                        formatted_date = last_update.strftime("%d/%m/%Y %H:%M")
+                        st.metric("Última Atualização", formatted_date)
+                    except:
+                        st.metric("Última Atualização", "Erro na data")
+                else:
+                    st.metric("Última Atualização", "N/A")
+            with col4:
+                if stats['cache_valid']:
+                    st.metric("Status", "✅ Atualizada")
+                else:
+                    st.metric("Status", "⚠️ Desatualizada")
+        
+        with tab3:
+            st.subheader("Filtros e Estratégias")
+            
+            # Filtros básicos
+            col1, col2 = st.columns(2)
+            with col1:
+                search_filter = st.text_input(
+                    "Buscar ações:",
+                    placeholder="Ex: Itaú, PETR4, Bancos...",
+                    key="stock_filter"
+                )
+            
+            with col2:
+                sectors = get_sectors()
+                selected_sector = st.selectbox(
+                    "Filtrar por setor:",
+                    options=["Todos"] + sectors,
+                    key="sector_filter"
+                )
+            
+            st.markdown("---")
+            
+            # Filtro estratégia Barsi
+            st.subheader("📈 Estratégia Luiz Barsi Filho")
+            st.write("Filtre ações que atendem aos critérios da metodologia Barsi:")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                apply_barsi_filter = st.checkbox(
+                    "Aplicar filtro Barsi",
+                    help="Mostra apenas ações que atendem aos critérios da metodologia Barsi"
+                )
+            
+            with col2:
+                barsi_minimum_score = st.selectbox(
+                    "Pontuação mínima:",
+                    options=["Todas", "Boas (2/4)", "Excelentes (3/4)"],
+                    help="Escolha a pontuação mínima dos critérios Barsi"
+                )
+            
+            if apply_barsi_filter:
+                st.info("🎯 **Critérios Barsi aplicados:**\n"
+                       "• Paga dividendos consistentemente\n"
+                       "• P/L entre 3 e 15\n"
+                       "• ROE > 15%\n"
+                       "• Valor de mercado > R$ 1 bilhão")
+        
+        with tab4:
+            st.subheader("Seleção de Ações para Monitoramento")
+            
+            # Criar listas ordenadas
+            all_tickers = sorted(get_all_tickers())
+            current_watched = set(st.session_state.watched_stocks)
+            
+            # Aplicar filtros
+            if search_filter:
+                filtered_results = search_stocks(search_filter)
+                filtered_tickers = [r['ticker'] for r in filtered_results]
+            elif selected_sector != "Todos":
+                filtered_tickers = get_tickers_by_sector(selected_sector)
+            else:
+                filtered_tickers = all_tickers[:30]  # Limitar para performance
+            
+            # Aplicar filtro Barsi se selecionado
+            if apply_barsi_filter and filtered_tickers:
+                # Buscar dados das ações para aplicar filtro Barsi
+                with st.spinner("Aplicando filtro Barsi..."):
+                    barsi_filtered = []
+                    stock_data = st.session_state.stock_manager.get_stock_data(filtered_tickers[:20])  # Limitar para performance
                     
-                    with cols[col_idx]:
-                        is_selected = st.checkbox(
-                            f"{ticker}",
-                            value=ticker in current_watched,
-                            key=f"cb_{ticker}",
-                            help=f"{name}"
-                        )
+                    for _, row in stock_data.iterrows():
+                        barsi_score = row.get('Critério Barsi', 'N/A')
                         
-                        if is_selected:
-                            new_watched_set.add(ticker)
-                        else:
-                            new_watched_set.discard(ticker)
-                
-                if st.form_submit_button("💾 Salvar Seleções", type="primary"):
-                    st.session_state.watched_stocks = list(new_watched_set)
-                    st.success(f"Watchlist atualizada! {len(st.session_state.watched_stocks)} ações.")
+                        # Extrair pontuação numérica
+                        if '(' in barsi_score:
+                            try:
+                                score_text = barsi_score.split('(')[1].split(')')[0]
+                                current_score = int(score_text.split('/')[0])
+                                
+                                # Aplicar critério de pontuação mínima
+                                if barsi_minimum_score == "Todas":
+                                    barsi_filtered.append(row['Ticker'])
+                                elif barsi_minimum_score == "Boas (2/4)" and current_score >= 2:
+                                    barsi_filtered.append(row['Ticker'])
+                                elif barsi_minimum_score == "Excelentes (3/4)" and current_score >= 3:
+                                    barsi_filtered.append(row['Ticker'])
+                            except:
+                                pass
+                    
+                    filtered_tickers = barsi_filtered
+                    st.success(f"✅ {len(filtered_tickers)} ações atendem aos critérios Barsi")
+            
+            # Botões de seleção rápida
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Selecionar Filtradas", use_container_width=True):
+                    new_selections = current_watched.union(set(filtered_tickers))
+                    st.session_state.watched_stocks = list(new_selections)
+                    st.success(f"{len(filtered_tickers)} ações adicionadas!")
                     st.rerun()
+            
+            with col2:
+                if st.button("❌ Desmarcar Filtradas", use_container_width=True):
+                    new_selections = current_watched - set(filtered_tickers)
+                    st.session_state.watched_stocks = list(new_selections)
+                    st.success(f"{len(filtered_tickers)} ações removidas!")
+                    st.rerun()
+            
+            # Lista de seleção compacta
+            if filtered_tickers:
+                st.write(f"**Ações encontradas ({len(filtered_tickers)}):**")
+                
+                with st.form("quick_selection"):
+                    # Organizar em colunas para economizar espaço
+                    cols = st.columns(3)
+                    new_watched_set = current_watched.copy()
+                    
+                    for i, ticker in enumerate(filtered_tickers[:30]):  # Limitar a 30
+                        col_idx = i % 3
+                        name = get_stock_name(ticker)
+                        
+                        with cols[col_idx]:
+                            is_selected = st.checkbox(
+                                f"{ticker}",
+                                value=ticker in current_watched,
+                                key=f"cb_{ticker}",
+                                help=f"{name}"
+                            )
+                            
+                            if is_selected:
+                                new_watched_set.add(ticker)
+                            else:
+                                new_watched_set.discard(ticker)
+                    
+                    if st.form_submit_button("💾 Salvar Seleções", type="primary"):
+                        st.session_state.watched_stocks = list(new_watched_set)
+                        st.success(f"Watchlist atualizada! {len(st.session_state.watched_stocks)} ações.")
+                        st.rerun()
+            else:
+                st.info("Nenhuma ação encontrada com os filtros aplicados.")
 
 # Sidebar compacta
 with st.sidebar:
