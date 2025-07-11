@@ -277,13 +277,6 @@ if st.session_state.show_config:
                     help="Escolha a pontuação mínima dos critérios BESST"
                 )
             
-            if apply_barsi_filter:
-                st.info("🎯 **Critérios BESST aplicados:**\n"
-                       "• **B**ancos, **E**nergia, **S**aneamento, **S**eguros, **T**elecomunicações\n"
-                       "• Paga dividendos consistentemente\n"
-                       "• Empresa consolidada (valor > R$ 1 bilhão)\n"
-                       "• Solidez financeira (ROE > 10%)")
-            
             st.markdown("---")
             
             # Seleção de ações na mesma aba
@@ -291,6 +284,90 @@ if st.session_state.show_config:
             
             # Criar listas ordenadas
             all_tickers = sorted(get_all_tickers())
+            
+            if apply_barsi_filter:
+                st.info("🎯 **Critérios BESST aplicados:**\n"
+                       "• **B**ancos, **E**nergia, **S**aneamento, **S**eguros, **T**elecomunicações\n"
+                       "• Paga dividendos consistentemente\n"
+                       "• Empresa consolidada (valor > R$ 1 bilhão)\n"
+                       "• Solidez financeira (ROE > 10%)")
+                
+                # Mostrar estatísticas do banco de dados
+                total_stocks = len(all_tickers)
+                st.info(f"📊 **Base de dados**: {total_stocks} ações brasileiras disponíveis\n"
+                       f"⚡ **Otimização**: Analisando subconjunto para melhor performance")
+                
+                # Botão para análise completa
+                if st.button("🔍 Analisar TODA a base de dados (pode demorar)", use_container_width=True):
+                    st.info("⏱️ Analisando todas as ações da base de dados com critérios BESST...")
+                    
+                    # Análise completa em lotes
+                    batch_size = 50
+                    total_batches = (len(all_tickers) + batch_size - 1) // batch_size
+                    all_besst_stocks = []
+                    
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    for i in range(0, len(all_tickers), batch_size):
+                        batch = all_tickers[i:i + batch_size]
+                        batch_num = i // batch_size + 1
+                        
+                        status_text.text(f"Processando lote {batch_num}/{total_batches} ({len(batch)} ações)")
+                        progress_bar.progress(i / len(all_tickers))
+                        
+                        try:
+                            batch_data = st.session_state.stock_manager.get_stock_data(batch)
+                            if not batch_data.empty:
+                                for _, row in batch_data.iterrows():
+                                    barsi_score = row.get('Critério Barsi', 'N/A')
+                                    if '(' in str(barsi_score):
+                                        try:
+                                            score_text = str(barsi_score).split('(')[1].split(')')[0]
+                                            current_score = int(score_text.split('/')[0])
+                                            if current_score >= 2:  # Pelo menos "Boas"
+                                                all_besst_stocks.append({
+                                                    'ticker': row['Ticker'],
+                                                    'score': current_score,
+                                                    'barsi_full': barsi_score
+                                                })
+                                        except:
+                                            continue
+                        except Exception as e:
+                            st.warning(f"Erro no lote {batch_num}: {e}")
+                            continue
+                    
+                    progress_bar.progress(1.0)
+                    status_text.text("Análise completa!")
+                    
+                    # Resultados finais
+                    if all_besst_stocks:
+                        st.success(f"✅ **Análise Completa da Base de Dados:**")
+                        
+                        # Contar por pontuação
+                        score_counts = {}
+                        for stock in all_besst_stocks:
+                            score = stock['score']
+                            score_counts[score] = score_counts.get(score, 0) + 1
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Total Analisado", f"{len(all_tickers)}")
+                        with col2:
+                            st.metric("Boas (2/4)", f"{score_counts.get(2, 0)}")
+                        with col3:
+                            st.metric("Excelentes (3/4)", f"{score_counts.get(3, 0)}")
+                        with col4:
+                            st.metric("BESST Perfeitas (4/4)", f"{score_counts.get(4, 0)}")
+                        
+                        # Mostrar as melhores
+                        best_stocks = [s for s in all_besst_stocks if s['score'] >= 3]
+                        if best_stocks:
+                            st.write("**🏆 Melhores ações encontradas (3/4 ou 4/4):**")
+                            for stock in best_stocks[:20]:  # Mostrar top 20
+                                st.write(f"• {stock['ticker']} - {stock['barsi_full']}")
+                    else:
+                        st.warning("Nenhuma ação atendeu aos critérios BESST na análise completa.")
             current_watched = set(st.session_state.watched_stocks)
             
             # Aplicar filtros base
