@@ -293,21 +293,30 @@ if st.session_state.show_config:
             all_tickers = sorted(get_all_tickers())
             current_watched = set(st.session_state.watched_stocks)
             
-            # Aplicar filtros
+            # Aplicar filtros base
             if search_filter:
                 filtered_results = search_stocks(search_filter)
                 filtered_tickers = [r['ticker'] for r in filtered_results]
             elif selected_sector != "Todos":
                 filtered_tickers = get_tickers_by_sector(selected_sector)
             else:
-                filtered_tickers = all_tickers[:30]  # Limitar para performance
+                # Se não há filtros específicos, usar uma lista maior para o filtro Barsi
+                filtered_tickers = all_tickers[:100] if apply_barsi_filter else all_tickers[:30]
             
             # Aplicar filtro Barsi se selecionado
-            if apply_barsi_filter and filtered_tickers:
-                # Buscar dados das ações para aplicar filtro Barsi
+            if apply_barsi_filter:
                 with st.spinner("Aplicando filtro Barsi..."):
                     barsi_filtered = []
-                    stock_data = st.session_state.stock_manager.get_stock_data(filtered_tickers[:20])  # Limitar para performance
+                    
+                    # Se não há lista de monitoramento e não há outros filtros, criar sugestão inicial
+                    if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
+                        st.info("💡 Criando lista inicial com base nos critérios Barsi...")
+                        # Usar uma amostra maior para encontrar boas ações
+                        sample_tickers = all_tickers[:200]
+                    else:
+                        sample_tickers = filtered_tickers[:50]  # Limitar para performance
+                    
+                    stock_data = st.session_state.stock_manager.get_stock_data(sample_tickers)
                     
                     for _, row in stock_data.iterrows():
                         barsi_score = row.get('Critério Barsi', 'N/A')
@@ -329,10 +338,22 @@ if st.session_state.show_config:
                                 pass
                     
                     filtered_tickers = barsi_filtered
-                    st.success(f"✅ {len(filtered_tickers)} ações atendem aos critérios Barsi")
+                    
+                    # Mensagem específica baseada no contexto
+                    if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
+                        st.success(f"✅ {len(filtered_tickers)} ações encontradas que atendem aos critérios Barsi para sua lista inicial")
+                    else:
+                        filter_context = []
+                        if search_filter:
+                            filter_context.append(f"busca '{search_filter}'")
+                        if selected_sector != "Todos":
+                            filter_context.append(f"setor '{selected_sector}'")
+                        
+                        context_text = " + ".join(filter_context) if filter_context else "filtros aplicados"
+                        st.success(f"✅ {len(filtered_tickers)} ações atendem aos critérios Barsi + {context_text}")
             
             # Botões de seleção rápida
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 if st.button("✅ Selecionar Filtradas", use_container_width=True):
                     new_selections = current_watched.union(set(filtered_tickers))
@@ -347,8 +368,22 @@ if st.session_state.show_config:
                     st.success(f"{len(filtered_tickers)} ações removidas!")
                     st.rerun()
             
+            with col3:
+                # Botão especial para lista inicial Barsi
+                if not st.session_state.watched_stocks and apply_barsi_filter and filtered_tickers:
+                    if st.button("🎯 Criar Lista Barsi", use_container_width=True, type="primary"):
+                        # Selecionar as melhores ações Barsi (limitado a 20)
+                        best_barsi = filtered_tickers[:20]
+                        st.session_state.watched_stocks = best_barsi
+                        st.success(f"✅ Lista inicial criada com {len(best_barsi)} ações que atendem aos critérios Barsi!")
+                        st.rerun()
+            
             # Lista de seleção compacta
             if filtered_tickers:
+                # Mostrar dica para lista inicial se não há ações monitoradas
+                if not st.session_state.watched_stocks and apply_barsi_filter:
+                    st.info("💡 **Dica:** Use o botão 'Criar Lista Barsi' para começar com uma seleção inteligente das melhores ações!")
+                
                 st.write(f"**Ações encontradas ({len(filtered_tickers)}):**")
                 
                 with st.form("quick_selection"):
@@ -378,7 +413,10 @@ if st.session_state.show_config:
                         st.success(f"Watchlist atualizada! {len(st.session_state.watched_stocks)} ações.")
                         st.rerun()
             else:
-                st.info("Nenhuma ação encontrada com os filtros aplicados.")
+                if not search_filter and selected_sector == "Todos" and not apply_barsi_filter:
+                    st.info("🎯 **Sugestão:** Ative o filtro Barsi para ver uma seleção inteligente de ações que atendem aos critérios de investimento!")
+                else:
+                    st.info("Nenhuma ação encontrada com os filtros aplicados.")
 
 # Sidebar compacta
 with st.sidebar:
