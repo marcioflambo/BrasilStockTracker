@@ -60,7 +60,8 @@ class StockDataManager:
         financials = stock.financials
         balance_sheet = stock.balance_sheet
         
-        # Calcular métricas
+        # Calcular métricas (incluindo metodologia Barsi)
+        dividend_per_share = self._get_dividend_per_share(stock)
         data = {
             'Ticker': ticker,
             'Nome': info.get('longName', ticker.replace('.SA', '')),
@@ -68,11 +69,16 @@ class StockDataManager:
             'Variação (%)': self._get_price_change(hist),
             'DY Atual (%)': self._get_dividend_yield(info),
             'DY Médio 5a (%)': self._get_avg_dividend_yield(stock),
+            'Div/Ação (R$)': dividend_per_share,
+            'Paga Dividendos': 'Sim' if dividend_per_share != 'N/A' and dividend_per_share > 0 else 'Não',
             'P/L': self._get_pe_ratio(info),
             'P/VP': self._get_pb_ratio(info),
+            'ROE (%)': self._get_roe(info),
+            'Dívida/PL': self._get_debt_to_equity(info, balance_sheet),
             'Margem Líq. (%)': self._get_profit_margin(info, financials),
             'Valor de Mercado': self._get_market_cap(info),
-            'Setor': info.get('sector', 'N/A')
+            'Setor': info.get('sector', 'N/A'),
+            'Critério Barsi': self._evaluate_barsi_criteria(info, dividend_per_share, self._get_pe_ratio(info), self._get_roe(info))
         }
         
         # Atualizar cache
@@ -175,6 +181,75 @@ class StockDataManager:
         except:
             return 'N/A'
     
+    def _get_dividend_per_share(self, stock) -> float:
+        """Obtém dividendo por ação dos últimos 12 meses"""
+        try:
+            dividends = stock.dividends
+            if not dividends.empty:
+                # Últimos 12 meses
+                one_year_ago = pd.Timestamp.now() - pd.DateOffset(years=1)
+                recent_dividends = dividends[dividends.index > one_year_ago]
+                if not recent_dividends.empty:
+                    return float(recent_dividends.sum())
+        except:
+            pass
+        return 'N/A'
+    
+    def _get_roe(self, info) -> float:
+        """Obtém Return on Equity (ROE)"""
+        try:
+            roe = info.get('returnOnEquity')
+            if roe:
+                return float(roe * 100)  # Converter para percentual
+        except:
+            pass
+        return 'N/A'
+    
+    def _get_debt_to_equity(self, info, balance_sheet) -> float:
+        """Obtém a relação Dívida/Patrimônio Líquido"""
+        try:
+            debt_to_equity = info.get('debtToEquity')
+            if debt_to_equity:
+                return float(debt_to_equity)
+        except:
+            pass
+        return 'N/A'
+    
+    def _evaluate_barsi_criteria(self, info, dividend_per_share, pe_ratio, roe) -> str:
+        """Avalia se a ação atende aos critérios da metodologia Barsi"""
+        criteria_met = 0
+        total_criteria = 0
+        
+        # Critério 1: Paga dividendos consistentemente
+        if dividend_per_share != 'N/A' and dividend_per_share > 0:
+            criteria_met += 1
+        total_criteria += 1
+        
+        # Critério 2: P/L entre 3 e 15
+        if pe_ratio != 'N/A' and 3 <= pe_ratio <= 15:
+            criteria_met += 1
+        total_criteria += 1
+        
+        # Critério 3: ROE > 15%
+        if roe != 'N/A' and roe > 15:
+            criteria_met += 1
+        total_criteria += 1
+        
+        # Critério 4: Empresa consolidada (valor de mercado > 1 bilhão)
+        market_cap = info.get('marketCap', 0)
+        if market_cap and market_cap > 1_000_000_000:
+            criteria_met += 1
+        total_criteria += 1
+        
+        percentage = (criteria_met / total_criteria) * 100
+        
+        if percentage >= 75:
+            return f"✅ Excelente ({criteria_met}/{total_criteria})"
+        elif percentage >= 50:
+            return f"⚠️ Boa ({criteria_met}/{total_criteria})"
+        else:
+            return f"❌ Não atende ({criteria_met}/{total_criteria})"
+    
     def _create_error_row(self, ticker: str) -> Dict[str, Any]:
         """Cria uma linha com dados N/A para ações com erro"""
         return {
@@ -184,9 +259,14 @@ class StockDataManager:
             'Variação (%)': 'N/A',
             'DY Atual (%)': 'N/A',
             'DY Médio 5a (%)': 'N/A',
+            'Div/Ação (R$)': 'N/A',
+            'Paga Dividendos': 'N/A',
             'P/L': 'N/A',
             'P/VP': 'N/A',
+            'ROE (%)': 'N/A',
+            'Dívida/PL': 'N/A',
             'Margem Líq. (%)': 'N/A',
             'Valor de Mercado': 'N/A',
-            'Setor': 'N/A'
+            'Setor': 'N/A',
+            'Critério Barsi': 'N/A'
         }
