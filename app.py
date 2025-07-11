@@ -4,10 +4,7 @@ import time
 from datetime import datetime
 from stock_data import StockDataManager
 from utils import format_currency, format_percentage, format_market_cap
-from brazilian_stocks import (
-    get_all_tickers, get_tickers_by_sector, get_sectors, 
-    search_stocks, get_stock_name, POPULAR_STOCKS, BRAZILIAN_STOCKS
-)
+from stock_scraper import get_dynamic_stocks
 
 # Configuração da página
 st.set_page_config(
@@ -21,6 +18,11 @@ st.set_page_config(
 if 'stock_manager' not in st.session_state:
     st.session_state.stock_manager = StockDataManager()
 
+# Carregar lista dinâmica de ações
+if 'dynamic_stocks' not in st.session_state:
+    with st.spinner("Carregando lista de ações brasileiras..."):
+        st.session_state.dynamic_stocks = get_dynamic_stocks()
+
 if 'watched_stocks' not in st.session_state:
     st.session_state.watched_stocks = ['ITUB4.SA', 'PETR4.SA', 'VALE3.SA', 'BBDC4.SA', 'ABEV3.SA']
 
@@ -29,6 +31,45 @@ if 'auto_refresh' not in st.session_state:
 
 if 'last_update' not in st.session_state:
     st.session_state.last_update = None
+
+# Funções auxiliares dinâmicas
+def get_all_tickers():
+    return list(st.session_state.dynamic_stocks.keys())
+
+def get_sectors():
+    sectors = set()
+    for stock_info in st.session_state.dynamic_stocks.values():
+        sectors.add(stock_info.get('sector', 'Diversos'))
+    return sorted(list(sectors))
+
+def get_tickers_by_sector(sector):
+    tickers = []
+    for ticker, info in st.session_state.dynamic_stocks.items():
+        if info.get('sector') == sector:
+            tickers.append(ticker)
+    return tickers
+
+def search_stocks(query):
+    query = query.upper()
+    results = []
+    for ticker, info in st.session_state.dynamic_stocks.items():
+        name = info.get('name', '')
+        sector = info.get('sector', 'Diversos')
+        
+        if query in ticker.upper() or query in name.upper():
+            results.append({
+                'ticker': ticker,
+                'name': name,
+                'sector': sector
+            })
+    return results
+
+def get_stock_name(ticker):
+    return st.session_state.dynamic_stocks.get(ticker, {}).get('name', ticker.replace('.SA', ''))
+
+def get_popular_stocks():
+    # Retorna os primeiros 20 stocks da lista como populares
+    return list(st.session_state.dynamic_stocks.keys())[:20]
 
 # Título principal
 st.title("📈 Monitor de Ações Brasileiras")
@@ -48,6 +89,13 @@ with st.sidebar:
     - {total_sectors} setores diferentes
     - Dados em tempo real via Yahoo Finance
     """)
+    
+    # Botão para atualizar lista de ações
+    if st.button("🔄 Atualizar Lista de Ações", help="Busca nova lista atualizada de ações brasileiras"):
+        with st.spinner("Atualizando lista de ações..."):
+            st.session_state.dynamic_stocks = get_dynamic_stocks()
+            st.success("Lista atualizada com sucesso!")
+            st.rerun()
     
     # Controle de auto-refresh
     auto_refresh = st.checkbox(
@@ -101,29 +149,29 @@ with st.sidebar:
             st.write(f"**Ações do setor {selected_sector}:**")
             
             for ticker in sector_stocks:
-                if ticker in BRAZILIAN_STOCKS[selected_sector]:
-                    name = BRAZILIAN_STOCKS[selected_sector][ticker]
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.write(f"**{ticker}** - {name}")
-                    with col2:
-                        if st.button("➕", key=f"sector_add_{ticker}", 
-                                   help=f"Adicionar {ticker}"):
-                            if ticker not in st.session_state.watched_stocks:
-                                st.session_state.watched_stocks.append(ticker)
-                                st.success(f"✅ {ticker} adicionada!")
-                                st.rerun()
+                name = get_stock_name(ticker)
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**{ticker}** - {name}")
+                with col2:
+                    if st.button("➕", key=f"sector_add_{ticker}", 
+                               help=f"Adicionar {ticker}"):
+                        if ticker not in st.session_state.watched_stocks:
+                            st.session_state.watched_stocks.append(ticker)
+                            st.success(f"✅ {ticker} adicionada!")
+                            st.rerun()
     
     with tab3:
         st.write("**Ações mais populares:**")
         
         # Mostrar em grade de 2 colunas
-        for i in range(0, len(POPULAR_STOCKS), 2):
+        popular_stocks = get_popular_stocks()
+        for i in range(0, len(popular_stocks), 2):
             col1, col2 = st.columns(2)
             
             for j, col in enumerate([col1, col2]):
-                if i + j < len(POPULAR_STOCKS):
-                    ticker = POPULAR_STOCKS[i + j]
+                if i + j < len(popular_stocks):
+                    ticker = popular_stocks[i + j]
                     name = get_stock_name(ticker)
                     
                     with col:

@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 import time
 from typing import List, Dict, Any
-from brazilian_stocks import get_stock_name
+# Função será importada dinamicamente pelo app principal
 
 class StockDataManager:
     """Gerenciador de dados de ações brasileiras"""
@@ -63,7 +63,7 @@ class StockDataManager:
         # Calcular métricas
         data = {
             'Ticker': ticker,
-            'Nome': info.get('longName', get_stock_name(ticker)),
+            'Nome': info.get('longName', ticker.replace('.SA', '')),
             'Preço Atual': self._get_current_price(stock, hist),
             'Variação (%)': self._get_price_change(hist),
             'DY Atual (%)': self._get_dividend_yield(info),
