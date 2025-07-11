@@ -5,6 +5,7 @@ from datetime import datetime
 from stock_data import StockDataManager
 from utils import format_currency, format_percentage, format_market_cap
 from stock_scraper import get_dynamic_stocks
+from watchlist_manager import WatchlistManager
 
 # Configuração da página
 st.set_page_config(
@@ -18,13 +19,17 @@ st.set_page_config(
 if 'stock_manager' not in st.session_state:
     st.session_state.stock_manager = StockDataManager()
 
+if 'watchlist_manager' not in st.session_state:
+    st.session_state.watchlist_manager = WatchlistManager()
+
 # Carregar lista dinâmica de ações
 if 'dynamic_stocks' not in st.session_state:
     with st.spinner("Carregando lista de ações brasileiras..."):
         st.session_state.dynamic_stocks = get_dynamic_stocks()
 
+# Carregar watchlist persistente
 if 'watched_stocks' not in st.session_state:
-    st.session_state.watched_stocks = ['ITUB4.SA', 'PETR4.SA', 'VALE3.SA', 'BBDC4.SA', 'ABEV3.SA']
+    st.session_state.watched_stocks = st.session_state.watchlist_manager.load_watchlist()
 
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
@@ -107,122 +112,129 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Adicionar nova ação
-    st.subheader("➕ Adicionar Ação")
+    # Seletor de ações
+    st.subheader("📋 Selecionar Ações para Monitoramento")
     
-    # Tabs para diferentes formas de adicionar
-    tab1, tab2, tab3 = st.tabs(["🔍 Buscar", "📊 Por Setor", "⭐ Populares"])
+    # Criar listas ordenadas
+    all_tickers = sorted(get_all_tickers())
+    current_watched = set(st.session_state.watched_stocks)
     
-    with tab1:
-        search_query = st.text_input(
-            "Buscar por nome ou código:",
-            placeholder="Ex: Itaú, PETR4, Petrobras..."
+    # Filtro de busca
+    search_filter = st.text_input(
+        "🔍 Filtrar ações (digite para buscar):",
+        placeholder="Ex: Itaú, PETR4, Petrobras, Bancos...",
+        key="stock_filter"
+    )
+    
+    # Filtrar lista baseado na busca
+    if search_filter:
+        filtered_results = search_stocks(search_filter)
+        filtered_tickers = [r['ticker'] for r in filtered_results]
+    else:
+        filtered_tickers = all_tickers
+    
+    # Controles de seleção rápida
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("✅ Selecionar Visíveis", use_container_width=True):
+            new_selections = current_watched.union(set(filtered_tickers))
+            st.session_state.watched_stocks = list(new_selections)
+            st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
+            st.success(f"✅ {len(filtered_tickers)} ações adicionadas!")
+            st.rerun()
+    
+    with col2:
+        if st.button("❌ Desmarcar Visíveis", use_container_width=True):
+            new_selections = current_watched - set(filtered_tickers)
+            st.session_state.watched_stocks = list(new_selections)
+            st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
+            st.success(f"✅ {len(filtered_tickers)} ações removidas!")
+            st.rerun()
+    
+    with col3:
+        if st.button("🔄 Limpar Tudo", use_container_width=True):
+            st.session_state.watched_stocks = []
+            st.session_state.watchlist_manager.save_watchlist([])
+            st.success("✅ Lista limpa!")
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Container scrollável com checkboxes
+    st.write(f"**📊 Ações Disponíveis ({len(filtered_tickers)} de {len(all_tickers)}):**")
+    
+    # Agrupar por setor se não estiver filtrando
+    if not search_filter:
+        # Mostrar por setor
+        sectors = get_sectors()
+        selected_sector_filter = st.selectbox(
+            "Filtrar por setor:",
+            options=["Todos os setores"] + sectors,
+            key="sector_filter"
         )
         
-        if search_query and len(search_query) >= 2:
-            results = search_stocks(search_query)
-            if results:
-                st.write("**Resultados encontrados:**")
-                for result in results[:10]:  # Limitar a 10 resultados
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.write(f"**{result['ticker']}** - {result['name']}")
-                        st.caption(f"Setor: {result['sector']}")
-                    with col2:
-                        if st.button("➕", key=f"add_{result['ticker']}", 
-                                   help=f"Adicionar {result['ticker']}"):
-                            if result['ticker'] not in st.session_state.watched_stocks:
-                                st.session_state.watched_stocks.append(result['ticker'])
-                                st.success(f"✅ {result['ticker']} adicionada!")
-                                st.rerun()
-            else:
-                st.info("Nenhuma ação encontrada com esse termo")
+        if selected_sector_filter != "Todos os setores":
+            filtered_tickers = get_tickers_by_sector(selected_sector_filter)
     
-    with tab2:
-        selected_sector = st.selectbox(
-            "Escolha um setor:",
-            options=["Selecione..."] + get_sectors()
-        )
+    # Mostrar checkboxes em container scrollável
+    with st.container():
+        # Limitar a 50 ações por vez para performance
+        display_tickers = filtered_tickers[:50]
+        if len(filtered_tickers) > 50:
+            st.info(f"Mostrando primeiras 50 de {len(filtered_tickers)} ações. Use o filtro para refinar a busca.")
         
-        if selected_sector != "Selecione...":
-            sector_stocks = get_tickers_by_sector(selected_sector)
-            st.write(f"**Ações do setor {selected_sector}:**")
-            
-            for ticker in sector_stocks:
+        # Checkbox para cada ação
+        changes_made = False
+        new_watched_set = current_watched.copy()
+        
+        # Usar formulário para processar mudanças em lote
+        with st.form("stock_selection_form"):
+            for ticker in display_tickers:
                 name = get_stock_name(ticker)
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.write(f"**{ticker}** - {name}")
-                with col2:
-                    if st.button("➕", key=f"sector_add_{ticker}", 
-                               help=f"Adicionar {ticker}"):
-                        if ticker not in st.session_state.watched_stocks:
-                            st.session_state.watched_stocks.append(ticker)
-                            st.success(f"✅ {ticker} adicionada!")
-                            st.rerun()
-    
-    with tab3:
-        st.write("**Ações mais populares:**")
-        
-        # Mostrar em grade de 2 colunas
-        popular_stocks = get_popular_stocks()
-        for i in range(0, len(popular_stocks), 2):
-            col1, col2 = st.columns(2)
+                sector = st.session_state.dynamic_stocks.get(ticker, {}).get('sector', 'N/A')
+                
+                # Checkbox para cada ação
+                is_selected = st.checkbox(
+                    f"**{ticker}** - {name}",
+                    value=ticker in current_watched,
+                    key=f"checkbox_{ticker}",
+                    help=f"Setor: {sector}"
+                )
+                
+                # Atualizar conjunto baseado na seleção
+                if is_selected and ticker not in current_watched:
+                    new_watched_set.add(ticker)
+                    changes_made = True
+                elif not is_selected and ticker in current_watched:
+                    new_watched_set.discard(ticker)
+                    changes_made = True
             
-            for j, col in enumerate([col1, col2]):
-                if i + j < len(popular_stocks):
-                    ticker = popular_stocks[i + j]
-                    name = get_stock_name(ticker)
-                    
-                    with col:
-                        if st.button(f"{ticker}\n{name}", 
-                                   key=f"popular_{ticker}",
-                                   use_container_width=True):
-                            if ticker not in st.session_state.watched_stocks:
-                                st.session_state.watched_stocks.append(ticker)
-                                st.success(f"✅ {ticker} adicionada!")
-                                st.rerun()
+            # Botão para aplicar mudanças
+            if st.form_submit_button("💾 Salvar Seleções", type="primary"):
+                st.session_state.watched_stocks = list(new_watched_set)
+                st.session_state.watchlist_manager.save_watchlist(st.session_state.watched_stocks)
+                st.success(f"✅ Watchlist atualizada! {len(st.session_state.watched_stocks)} ações selecionadas.")
+                st.rerun()
     
     st.markdown("---")
     
-    # Adicionar manualmente (método original)
-    st.subheader("✍️ Adicionar Manualmente")
-    new_stock = st.text_input(
-        "Código da ação (ex: ITUB4.SA):",
-        placeholder="Digite o ticker..."
-    ).upper()
-    
-    if st.button("Adicionar", type="primary"):
-        if new_stock and new_stock not in st.session_state.watched_stocks:
-            # Validar se a ação existe
-            test_data = st.session_state.stock_manager.get_stock_data([new_stock])
-            if not test_data.empty and test_data.iloc[0]['Preço Atual'] != 'N/A':
-                st.session_state.watched_stocks.append(new_stock)
-                st.success(f"✅ {new_stock} adicionada com sucesso!")
-                st.rerun()
-            else:
-                st.error(f"❌ Ação {new_stock} não encontrada ou inválida")
-        elif new_stock in st.session_state.watched_stocks:
-            st.warning(f"⚠️ {new_stock} já está na lista")
-        elif not new_stock:
-            st.warning("⚠️ Digite um código de ação válido")
-    
-    st.markdown("---")
-    
-    # Lista de ações monitoradas
-    st.subheader("📋 Ações Monitoradas")
-    for i, stock in enumerate(st.session_state.watched_stocks):
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.text(stock)
-        with col2:
-            if st.button("🗑️", key=f"remove_{i}", help=f"Remover {stock}"):
-                st.session_state.watched_stocks.remove(stock)
-                st.rerun()
+    # Resumo da seleção atual
+    st.subheader("📊 Ações Selecionadas")
+    if st.session_state.watched_stocks:
+        st.info(f"📈 **{len(st.session_state.watched_stocks)} ações** sendo monitoradas")
+        
+        # Mostrar ações em chips/tags
+        if len(st.session_state.watched_stocks) <= 10:
+            for stock in st.session_state.watched_stocks:
+                st.caption(f"• {stock} - {get_stock_name(stock)}")
+        else:
+            st.caption(f"• {', '.join(st.session_state.watched_stocks[:5])} e mais {len(st.session_state.watched_stocks)-5} ações...")
+    else:
+        st.warning("⚠️ Nenhuma ação selecionada para monitoramento")
     
     # Botão de atualização manual
     st.markdown("---")
-    if st.button("🔄 Atualizar Agora", type="secondary"):
+    if st.button("🔄 Atualizar Dados", type="secondary", use_container_width=True):
         st.session_state.last_update = None
         st.rerun()
 
