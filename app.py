@@ -153,7 +153,7 @@ if 'show_config' not in st.session_state:
 if st.session_state.show_config:
     with st.expander("⚙️ Configurações", expanded=True):
         # Criar tabs organizadas
-        tab1, tab2, tab3, tab4 = st.tabs(["🔧 Controles", "📊 Base de Dados", "🎯 Filtros", "📋 Seleção"])
+        tab1, tab2, tab3 = st.tabs(["🔧 Controles", "📊 Base de Dados", "🎯 Filtros & Seleção"])
         
         with tab1:
             st.subheader("Controles da Aplicação")
@@ -283,9 +283,11 @@ if st.session_state.show_config:
                        "• P/L entre 3 e 15\n"
                        "• ROE > 15%\n"
                        "• Valor de mercado > R$ 1 bilhão")
-        
-        with tab4:
-            st.subheader("Seleção de Ações para Monitoramento")
+            
+            st.markdown("---")
+            
+            # Seleção de ações na mesma aba
+            st.subheader("📋 Seleção de Ações")
             
             # Criar listas ordenadas
             all_tickers = sorted(get_all_tickers())
