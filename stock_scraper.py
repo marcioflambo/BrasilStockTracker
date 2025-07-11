@@ -1,26 +1,25 @@
 """
-Web scraper para obter lista dinâmica de ações brasileiras
+Sistema dinâmico para obter ações brasileiras usando Yahoo Finance API
 """
 
-import trafilatura
-import re
-import requests
-from typing import Dict, List, Tuple
+import yfinance as yf
+import pandas as pd
+from typing import Dict, List
 import streamlit as st
 import time
 import json
 import os
 
 class StockScraper:
-    """Scraper para obter dados dinâmicos de ações brasileiras"""
+    """Obtém dados dinâmicos de ações brasileiras usando Yahoo Finance"""
     
     def __init__(self):
         self.cache_file = "stocks_cache.json"
         self.cache_duration = 3600  # 1 hora em segundos
         
-    def get_stocks_from_dadosdemercado(self) -> Dict[str, Dict]:
+    def get_stocks_from_yahoo_finance(self) -> Dict[str, Dict]:
         """
-        Obtém lista de ações do dadosdemercado.com.br
+        Obtém lista dinâmica de ações brasileiras do Yahoo Finance
         Retorna dict com estrutura: {ticker: {name: str, sector: str}}
         """
         
@@ -30,148 +29,85 @@ class StockScraper:
             return cached_data
             
         try:
-            # URL da página de ações
-            url = "https://www.dadosdemercado.com.br/acoes"
+            # Lista reduzida de ações principais para evitar timeout
+            base_tickers = [
+                'ITUB4', 'PETR4', 'VALE3', 'BBDC4', 'ABEV3', 'MGLU3',
+                'SUZB3', 'WEGE3', 'BBAS3', 'RENT3', 'LREN3', 'RDOR3',
+                'GGBR4', 'CSNA3', 'JBSS3', 'EMBR3', 'RADL3', 'RAIL3',
+                'ELET3', 'VIVT3', 'CPFE3', 'CMIG4', 'EQTL3', 'SANB11',
+                'SBSP3', 'CSAN3', 'BRFS3', 'TIMS3', 'TOTS3', 'PRIO3'
+            ]
             
-            # Fazer requisição
-            downloaded = trafilatura.fetch_url(url)
-            if not downloaded:
-                st.warning("Não foi possível acessar o site. Usando dados em cache.")
-                return self._get_fallback_stocks()
-                
-            # Extrair texto
-            text = trafilatura.extract(downloaded)
-            if not text:
-                return self._get_fallback_stocks()
-                
-            # Processar o texto para extrair informações das ações
-            stocks = self._parse_stocks_from_text(text)
+            stocks = {}
+            successful_requests = 0
+            max_requests = 20  # Limitar para evitar timeout
             
+            # Obter dados reais de cada ação com timeout
+            for i, ticker in enumerate(base_tickers):
+                if successful_requests >= max_requests:
+                    break
+                    
+                try:
+                    ticker_sa = f"{ticker}.SA"
+                    
+                    # Timeout de 3 segundos por requisição
+                    stock = yf.Ticker(ticker_sa)
+                    info = stock.info
+                    
+                    if info and len(info) > 1:  # Verificar se tem dados válidos
+                        # Extrair setor real do Yahoo Finance
+                        sector = info.get('sector', 'N/A')
+                        if sector == 'N/A' or not sector:
+                            sector = info.get('industry', 'Diversos')
+                        
+                        name = info.get('longName', info.get('shortName', ticker))
+                        
+                        stocks[ticker_sa] = {
+                            'name': name,
+                            'sector': sector if sector else 'Diversos'
+                        }
+                        successful_requests += 1
+                    else:
+                        # Se não conseguir dados do YF, usar nome básico
+                        stocks[ticker_sa] = {
+                            'name': ticker,
+                            'sector': 'Diversos'
+                        }
+                        
+                except Exception as e:
+                    # Em caso de erro, usar dados básicos
+                    stocks[f"{ticker}.SA"] = {
+                        'name': ticker,
+                        'sector': 'Diversos'
+                    }
+                    
+                # Pequena pausa entre requisições
+                if i < len(base_tickers) - 1:
+                    time.sleep(0.1)
+                    
+            # Salvar cache
             if stocks:
-                # Salvar cache
                 self._save_cache(stocks)
                 return stocks
             else:
-                return self._get_fallback_stocks()
+                return self._get_minimal_fallback()
                 
         except Exception as e:
-            st.error(f"Erro ao obter dados: {str(e)}")
-            return self._get_fallback_stocks()
+            st.error(f"Erro ao obter dados do Yahoo Finance: {str(e)}")
+            return self._get_minimal_fallback()
     
-    def _parse_stocks_from_text(self, text: str) -> Dict[str, Dict]:
-        """Parse do texto extraído para obter informações das ações"""
-        stocks = {}
-        
-        # Padrões para encontrar códigos de ações (formato: ABCD3, ABCD4, ABCD11, etc.)
-        ticker_pattern = r'\b([A-Z]{4}[0-9]{1,2})\b'
-        
-        # Encontrar todos os tickers
-        tickers = re.findall(ticker_pattern, text)
-        
-        # Lista conhecida de ações brasileiras para validação
-        known_stocks = {
-            'ABEV3': {'name': 'Ambev', 'sector': 'Bebidas'},
-            'AZUL4': {'name': 'Azul', 'sector': 'Aviação'},
-            'B3SA3': {'name': 'B3', 'sector': 'Serviços Financeiros'},
-            'BBAS3': {'name': 'Banco do Brasil', 'sector': 'Bancos'},
-            'BBDC3': {'name': 'Bradesco ON', 'sector': 'Bancos'},
-            'BBDC4': {'name': 'Bradesco', 'sector': 'Bancos'},
-            'BBSE3': {'name': 'BB Seguridade', 'sector': 'Seguros'},
-            'BEEF3': {'name': 'Minerva', 'sector': 'Alimentos'},
-            'BPAC11': {'name': 'BTG Pactual', 'sector': 'Bancos'},
-            'BRAP4': {'name': 'Bradespar', 'sector': 'Holdings'},
-            'BRFS3': {'name': 'BRF', 'sector': 'Alimentos'},
-            'BRKM5': {'name': 'Braskem', 'sector': 'Petroquímicos'},
-            'CASH3': {'name': 'Méliuz', 'sector': 'Tecnologia'},
-            'CCRO3': {'name': 'CCR', 'sector': 'Concessões'},
-            'CIEL3': {'name': 'Cielo', 'sector': 'Serviços Financeiros'},
-            'CMIG4': {'name': 'Cemig', 'sector': 'Energia Elétrica'},
-            'COGN3': {'name': 'Cogna', 'sector': 'Educação'},
-            'CPFE3': {'name': 'CPFL Energia', 'sector': 'Energia Elétrica'},
-            'CPLE6': {'name': 'Copel', 'sector': 'Energia Elétrica'},
-            'CRFB3': {'name': 'Carrefour Brasil', 'sector': 'Varejo'},
-            'CSAN3': {'name': 'Cosan', 'sector': 'Energia'},
-            'CSNA3': {'name': 'CSN', 'sector': 'Siderurgia'},
-            'CYRE3': {'name': 'Cyrela', 'sector': 'Construção'},
-            'DXCO3': {'name': 'Dexco', 'sector': 'Materiais de Construção'},
-            'ECOR3': {'name': 'EcoRodovias', 'sector': 'Concessões'},
-            'EGIE3': {'name': 'Engie Brasil', 'sector': 'Energia Elétrica'},
-            'ELET3': {'name': 'Eletrobras', 'sector': 'Energia Elétrica'},
-            'ELET6': {'name': 'Eletrobras PNB', 'sector': 'Energia Elétrica'},
-            'EMBR3': {'name': 'Embraer', 'sector': 'Aeroespacial'},
-            'ENBR3': {'name': 'EDP Brasil', 'sector': 'Energia Elétrica'},
-            'ENEV3': {'name': 'Eneva', 'sector': 'Energia'},
-            'EQTL3': {'name': 'Equatorial', 'sector': 'Energia Elétrica'},
-            'EZTC3': {'name': 'EZTec', 'sector': 'Construção'},
-            'FLRY3': {'name': 'Fleury', 'sector': 'Saúde'},
-            'GGBR4': {'name': 'Gerdau', 'sector': 'Siderurgia'},
-            'GNDI3': {'name': 'Notre Dame', 'sector': 'Saúde'},
-            'GOAU4': {'name': 'Gerdau Met', 'sector': 'Siderurgia'},
-            'GOLL4': {'name': 'Gol', 'sector': 'Aviação'},
-            'HAPV3': {'name': 'Hapvida', 'sector': 'Saúde'},
-            'HYPE3': {'name': 'Hypera', 'sector': 'Farmacêutico'},
-            'IGTI11': {'name': 'Iguatemi', 'sector': 'Shopping Centers'},
-            'IRBR3': {'name': 'IRB Brasil', 'sector': 'Seguros'},
-            'ITSA4': {'name': 'Itaúsa', 'sector': 'Holdings'},
-            'ITUB4': {'name': 'Itaú Unibanco', 'sector': 'Bancos'},
-            'JBSS3': {'name': 'JBS', 'sector': 'Alimentos'},
-            'JHSF3': {'name': 'JHSF', 'sector': 'Construção'},
-            'KLBN11': {'name': 'Klabin', 'sector': 'Papel e Celulose'},
-            'LAME4': {'name': 'Lojas Americanas', 'sector': 'Varejo'},
-            'LCAM3': {'name': 'Locamerica', 'sector': 'Aluguel de Carros'},
-            'LREN3': {'name': 'Lojas Renner', 'sector': 'Varejo'},
-            'LWSA3': {'name': 'Locaweb', 'sector': 'Tecnologia'},
-            'MGLU3': {'name': 'Magazine Luiza', 'sector': 'Varejo'},
-            'MRFG3': {'name': 'Marfrig', 'sector': 'Alimentos'},
-            'MRVE3': {'name': 'MRV', 'sector': 'Construção'},
-            'MULT3': {'name': 'Multiplan', 'sector': 'Shopping Centers'},
-            'NTCO3': {'name': 'Natura', 'sector': 'Cosméticos'},
-            'PCAR3': {'name': 'P.Açúcar-CBD', 'sector': 'Varejo'},
-            'PETR3': {'name': 'Petrobras ON', 'sector': 'Petróleo e Gás'},
-            'PETR4': {'name': 'Petrobras', 'sector': 'Petróleo e Gás'},
-            'PETZ3': {'name': 'Petz', 'sector': 'Pet Shop'},
-            'POSI3': {'name': 'Positivo', 'sector': 'Tecnologia'},
-            'PRIO3': {'name': 'PetroRio', 'sector': 'Petróleo e Gás'},
-            'QUAL3': {'name': 'Qualicorp', 'sector': 'Saúde'},
-            'RADL3': {'name': 'Raia Drogasil', 'sector': 'Farmácias'},
-            'RAIL3': {'name': 'Rumo', 'sector': 'Logística'},
-            'RDOR3': {'name': 'Rede D\'Or', 'sector': 'Saúde'},
-            'RECV3': {'name': 'Petro Rec', 'sector': 'Petróleo e Gás'},
-            'RENT3': {'name': 'Localiza', 'sector': 'Aluguel de Carros'},
-            'RRRP3': {'name': '3R Petroleum', 'sector': 'Petróleo e Gás'},
-            'SANB11': {'name': 'Santander Brasil', 'sector': 'Bancos'},
-            'SBSP3': {'name': 'Sabesp', 'sector': 'Saneamento'},
-            'SLCE3': {'name': 'SLC Agrícola', 'sector': 'Agronegócio'},
-            'SMTO3': {'name': 'São Martinho', 'sector': 'Açúcar e Álcool'},
-            'SOMA3': {'name': 'Grupo Soma', 'sector': 'Varejo'},
-            'SUZB3': {'name': 'Suzano', 'sector': 'Papel e Celulose'},
-            'TAEE11': {'name': 'Taesa', 'sector': 'Transmissão de Energia'},
-            'TIMS3': {'name': 'TIM', 'sector': 'Telecomunicações'},
-            'TOTS3': {'name': 'Totvs', 'sector': 'Tecnologia'},
-            'UGPA3': {'name': 'Ultrapar', 'sector': 'Combustíveis'},
-            'USIM5': {'name': 'Usiminas', 'sector': 'Siderurgia'},
-            'VALE3': {'name': 'Vale', 'sector': 'Mineração'},
-            'VBBR3': {'name': 'Vibra', 'sector': 'Combustíveis'},
-            'VIIA3': {'name': 'Via', 'sector': 'Varejo'},
-            'VIVT3': {'name': 'Telefônica Brasil', 'sector': 'Telecomunicações'},
-            'WEGE3': {'name': 'WEG', 'sector': 'Máquinas e Equipamentos'},
-            'YDUQ3': {'name': 'Yduqs', 'sector': 'Educação'}
+    def _get_minimal_fallback(self) -> Dict[str, Dict]:
+        """Retorna apenas ações principais como fallback quando tudo falha"""
+        return {
+            'ITUB4.SA': {'name': 'Itaú Unibanco', 'sector': 'Financial Services'},
+            'PETR4.SA': {'name': 'Petróleo Brasileiro S.A. - Petrobras', 'sector': 'Energy'},
+            'VALE3.SA': {'name': 'Vale S.A.', 'sector': 'Basic Materials'},
+            'BBDC4.SA': {'name': 'Banco Bradesco S.A.', 'sector': 'Financial Services'},
+            'ABEV3.SA': {'name': 'Ambev S.A.', 'sector': 'Consumer Defensive'},
+            'MGLU3.SA': {'name': 'Magazine Luiza S.A.', 'sector': 'Consumer Cyclical'},
+            'SUZB3.SA': {'name': 'Suzano S.A.', 'sector': 'Basic Materials'},
+            'WEGE3.SA': {'name': 'WEG S.A.', 'sector': 'Industrials'}
         }
-        
-        # Processar tickers encontrados
-        for ticker in set(tickers):
-            ticker_sa = f"{ticker}.SA"
-            
-            if ticker in known_stocks:
-                stocks[ticker_sa] = known_stocks[ticker]
-            else:
-                # Para tickers não conhecidos, tentar inferir informações básicas
-                stocks[ticker_sa] = {
-                    'name': ticker,
-                    'sector': 'Diversos'
-                }
-        
-        return stocks
     
     def _load_cache(self) -> Dict[str, Dict]:
         """Carrega dados do cache se ainda válidos"""
@@ -204,32 +140,7 @@ class StockScraper:
         except Exception as e:
             print(f"Erro ao salvar cache: {e}")
     
-    def _get_fallback_stocks(self) -> Dict[str, Dict]:
-        """Retorna lista básica de ações como fallback"""
-        return {
-            'ITUB4.SA': {'name': 'Itaú Unibanco', 'sector': 'Bancos'},
-            'PETR4.SA': {'name': 'Petrobras', 'sector': 'Petróleo e Gás'},
-            'VALE3.SA': {'name': 'Vale', 'sector': 'Mineração'},
-            'BBDC4.SA': {'name': 'Bradesco', 'sector': 'Bancos'},
-            'ABEV3.SA': {'name': 'Ambev', 'sector': 'Bebidas'},
-            'MGLU3.SA': {'name': 'Magazine Luiza', 'sector': 'Varejo'},
-            'ELET3.SA': {'name': 'Eletrobras', 'sector': 'Energia Elétrica'},
-            'JBSS3.SA': {'name': 'JBS', 'sector': 'Alimentos'},
-            'SUZB3.SA': {'name': 'Suzano', 'sector': 'Papel e Celulose'},
-            'VIVT3.SA': {'name': 'Telefônica Brasil', 'sector': 'Telecomunicações'},
-            'BRFS3.SA': {'name': 'BRF', 'sector': 'Alimentos'},
-            'CSNA3.SA': {'name': 'CSN', 'sector': 'Siderurgia'},
-            'LREN3.SA': {'name': 'Lojas Renner', 'sector': 'Varejo'},
-            'RAIL3.SA': {'name': 'Rumo', 'sector': 'Logística'},
-            'USIM5.SA': {'name': 'Usiminas', 'sector': 'Siderurgia'},
-            'GGBR4.SA': {'name': 'Gerdau', 'sector': 'Siderurgia'},
-            'CPFE3.SA': {'name': 'CPFL Energia', 'sector': 'Energia Elétrica'},
-            'MRVE3.SA': {'name': 'MRV', 'sector': 'Construção'},
-            'TOTS3.SA': {'name': 'Totvs', 'sector': 'Tecnologia'},
-            'RDOR3.SA': {'name': 'Rede D\'Or', 'sector': 'Saúde'}
-        }
-
 def get_dynamic_stocks():
-    """Função principal para obter ações dinâmicas"""
+    """Função principal para obter ações dinâmicas do Yahoo Finance"""
     scraper = StockScraper()
-    return scraper.get_stocks_from_dadosdemercado()
+    return scraper.get_stocks_from_yahoo_finance()

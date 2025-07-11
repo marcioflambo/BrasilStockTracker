@@ -82,15 +82,16 @@ The application comes pre-configured with major Brazilian stocks:
 - BBDC4.SA (Bradesco)
 - ABEV3.SA (Ambev)
 
-### Dynamic Stock Database (Updated: January 2025)
-The application now uses dynamic stock data retrieval:
-- **Dynamic scraping** from external financial websites
-- **Automatic caching** with 1-hour expiry for performance
-- **Real-time stock discovery** with manual refresh capability
+### Dynamic Stock Database (Updated: July 2025)
+The application now uses 100% dynamic stock data retrieval:
+- **Yahoo Finance API integration** for real-time company data extraction
+- **Automatic sector detection** from Yahoo Finance metadata
+- **Real company names** fetched directly from financial APIs
+- **Intelligent caching** with 1-hour expiry for performance
+- **No hardcoded data** - all information comes from live sources
 - **Search functionality** by company name or ticker symbol
-- **Sector-based browsing** for easy stock discovery
-- **Popular stocks** quick-add feature for most traded stocks
-- **Fallback system** with core Brazilian stocks for reliability
+- **Sector-based browsing** with real sectors from Yahoo Finance
+- **Minimal fallback** with only 8 core stocks when APIs fail
 
 ### Key Features
 - Real-time stock price monitoring with comprehensive financial metrics
