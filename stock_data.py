@@ -216,39 +216,53 @@ class StockDataManager:
         return 'N/A'
     
     def _evaluate_barsi_criteria(self, info, dividend_per_share, pe_ratio, roe) -> str:
-        """Avalia se a ação atende aos critérios da metodologia Barsi"""
+        """Avalia se a ação atende aos critérios da metodologia BESST de Luiz Barsi"""
         criteria_met = 0
         total_criteria = 0
         
-        # Critério 1: Paga dividendos consistentemente
+        # Critério 1: Setor BESST (Bancos, Energia, Saneamento, Seguros, Telecomunicações)
+        sector = info.get('sector', '').lower()
+        industry = info.get('industry', '').lower()
+        
+        besst_sectors = [
+            'financeiro', 'bancos', 'financial', 'banco', 'bank',
+            'energia', 'elétrica', 'utilities', 'electric', 'energy',
+            'saneamento', 'water', 'sanitation', 'básico',
+            'seguro', 'insurance', 'seguradora', 'previdência',
+            'telecomunicações', 'communication', 'telecom', 'telefonia'
+        ]
+        
+        is_besst_sector = any(term in sector or term in industry for term in besst_sectors)
+        if is_besst_sector:
+            criteria_met += 1
+        total_criteria += 1
+        
+        # Critério 2: Paga dividendos consistentemente
         if dividend_per_share != 'N/A' and dividend_per_share > 0:
             criteria_met += 1
         total_criteria += 1
         
-        # Critério 2: P/L entre 3 e 15
-        if pe_ratio != 'N/A' and 3 <= pe_ratio <= 15:
-            criteria_met += 1
-        total_criteria += 1
-        
-        # Critério 3: ROE > 15%
-        if roe != 'N/A' and roe > 15:
-            criteria_met += 1
-        total_criteria += 1
-        
-        # Critério 4: Empresa consolidada (valor de mercado > 1 bilhão)
+        # Critério 3: Empresa consolidada (valor de mercado > 1 bilhão)
         market_cap = info.get('marketCap', 0)
         if market_cap and market_cap > 1_000_000_000:
             criteria_met += 1
         total_criteria += 1
         
+        # Critério 4: Solidez financeira (ROE > 10% para empresas consolidadas)
+        if roe != 'N/A' and roe > 10:
+            criteria_met += 1
+        total_criteria += 1
+        
         percentage = (criteria_met / total_criteria) * 100
         
-        if percentage >= 75:
+        if percentage == 100:
+            return f"🎯 BESST ({criteria_met}/{total_criteria})"
+        elif percentage >= 75:
             return f"✅ Excelente ({criteria_met}/{total_criteria})"
         elif percentage >= 50:
             return f"⚠️ Boa ({criteria_met}/{total_criteria})"
         else:
-            return f"❌ Não atende ({criteria_met}/{total_criteria})"
+            return f"❌ Não BESST ({criteria_met}/{total_criteria})"
     
     def _create_error_row(self, ticker: str) -> Dict[str, Any]:
         """Cria uma linha com dados N/A para ações com erro"""

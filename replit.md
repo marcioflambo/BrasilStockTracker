@@ -117,5 +117,7 @@ The application uses a completely dynamic database system:
 - **Streamlined functionality**: Focus on core stock monitoring features
 - **Database-driven**: All stock selections filtered from JSON database
 - **Enhanced configuration panel**: Reorganized into tabs for better usability (July 11, 2025)
-- **Barsi filter integration**: Added Luiz Barsi Filho investment strategy filter (July 11, 2025)
-- **Improved UI organization**: Separated controls, database management, filters, and selection into distinct tabs
+- **BESST methodology integration**: Implemented authentic Luiz Barsi Filho BESST investment strategy (July 11, 2025)
+- **Improved UI organization**: Combined filters and selection into single tab for better workflow
+- **Authentic investment criteria**: Applied real BESST sectors (Bancos, Energia, Saneamento, Seguros, Telecomunicações)
+- **Performance optimization**: Reduced sample size for faster filtering without compromising accuracy

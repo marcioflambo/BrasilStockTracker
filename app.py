@@ -260,29 +260,29 @@ if st.session_state.show_config:
             st.markdown("---")
             
             # Filtro estratégia Barsi
-            st.subheader("📈 Estratégia Luiz Barsi Filho")
-            st.write("Filtre ações que atendem aos critérios da metodologia Barsi:")
+            st.subheader("📈 Metodologia BESST - Luiz Barsi Filho")
+            st.write("Filtre ações que atendem aos critérios da metodologia BESST:")
             
             col1, col2 = st.columns(2)
             with col1:
                 apply_barsi_filter = st.checkbox(
-                    "Aplicar filtro Barsi",
-                    help="Mostra apenas ações que atendem aos critérios da metodologia Barsi"
+                    "Aplicar filtro BESST",
+                    help="Mostra apenas ações que atendem aos critérios da metodologia BESST"
                 )
             
             with col2:
                 barsi_minimum_score = st.selectbox(
                     "Pontuação mínima:",
-                    options=["Todas", "Boas (2/4)", "Excelentes (3/4)"],
-                    help="Escolha a pontuação mínima dos critérios Barsi"
+                    options=["Todas", "Boas (2/4)", "Excelentes (3/4)", "Só BESST (4/4)"],
+                    help="Escolha a pontuação mínima dos critérios BESST"
                 )
             
             if apply_barsi_filter:
-                st.info("🎯 **Critérios Barsi aplicados:**\n"
+                st.info("🎯 **Critérios BESST aplicados:**\n"
+                       "• **B**ancos, **E**nergia, **S**aneamento, **S**eguros, **T**elecomunicações\n"
                        "• Paga dividendos consistentemente\n"
-                       "• P/L entre 3 e 15\n"
-                       "• ROE > 15%\n"
-                       "• Valor de mercado > R$ 1 bilhão")
+                       "• Empresa consolidada (valor > R$ 1 bilhão)\n"
+                       "• Solidez financeira (ROE > 10%)")
             
             st.markdown("---")
             
@@ -307,13 +307,13 @@ if st.session_state.show_config:
             if apply_barsi_filter:
                 # Usar uma lista menor para melhor performance
                 if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
-                    st.info("💡 Criando lista inicial com base nos critérios Barsi...")
+                    st.info("💡 Criando lista inicial com base nos critérios BESST...")
                     sample_tickers = all_tickers[:50]  # Reduzir drasticamente
                 else:
                     sample_tickers = filtered_tickers[:20]  # Limitar ainda mais
                 
                 # Mostrar progresso simples
-                with st.spinner(f"Analisando {len(sample_tickers)} ações com critérios Barsi..."):
+                with st.spinner(f"Analisando {len(sample_tickers)} ações com critérios BESST..."):
                     try:
                         # Buscar dados das ações
                         stock_data = st.session_state.stock_manager.get_stock_data(sample_tickers)
@@ -337,6 +337,8 @@ if st.session_state.show_config:
                                             barsi_filtered.append(row['Ticker'])
                                         elif barsi_minimum_score == "Excelentes (3/4)" and current_score >= 3:
                                             barsi_filtered.append(row['Ticker'])
+                                        elif barsi_minimum_score == "Só BESST (4/4)" and current_score >= 4:
+                                            barsi_filtered.append(row['Ticker'])
                                     except:
                                         continue
                         
@@ -344,7 +346,7 @@ if st.session_state.show_config:
                         
                         # Mensagem específica baseada no contexto
                         if not st.session_state.watched_stocks and not search_filter and selected_sector == "Todos":
-                            st.success(f"✅ {len(filtered_tickers)} ações encontradas que atendem aos critérios Barsi")
+                            st.success(f"✅ {len(filtered_tickers)} ações encontradas que atendem aos critérios BESST")
                         else:
                             filter_context = []
                             if search_filter:
@@ -353,16 +355,16 @@ if st.session_state.show_config:
                                 filter_context.append(f"setor '{selected_sector}'")
                             
                             context_text = " + ".join(filter_context) if filter_context else "filtros aplicados"
-                            st.success(f"✅ {len(filtered_tickers)} ações atendem aos critérios Barsi + {context_text}")
+                            st.success(f"✅ {len(filtered_tickers)} ações atendem aos critérios BESST + {context_text}")
                     
                     except Exception as e:
-                        st.error(f"❌ Erro ao aplicar filtro Barsi: {str(e)}")
+                        st.error(f"❌ Erro ao aplicar filtro BESST: {str(e)}")
                         # Usar lista padrão em caso de erro
                         filtered_tickers = all_tickers[:20]
                 
                 # Se não encontrou nenhuma ação, usar lista padrão
                 if not filtered_tickers:
-                    st.warning("⚠️ Nenhuma ação encontrada com os critérios Barsi. Mostrando lista padrão.")
+                    st.warning("⚠️ Nenhuma ação encontrada com os critérios BESST. Mostrando lista padrão.")
                     filtered_tickers = all_tickers[:20]
             
             # Botões de seleção rápida
@@ -382,20 +384,20 @@ if st.session_state.show_config:
                     st.rerun()
             
             with col3:
-                # Botão especial para lista inicial Barsi
+                # Botão especial para lista inicial BESST
                 if not st.session_state.watched_stocks and apply_barsi_filter and filtered_tickers:
-                    if st.button("🎯 Criar Lista Barsi", use_container_width=True, type="primary"):
-                        # Selecionar as melhores ações Barsi (limitado a 20)
-                        best_barsi = filtered_tickers[:20]
-                        st.session_state.watched_stocks = best_barsi
-                        st.success(f"✅ Lista inicial criada com {len(best_barsi)} ações que atendem aos critérios Barsi!")
+                    if st.button("🎯 Criar Lista BESST", use_container_width=True, type="primary"):
+                        # Selecionar as melhores ações BESST (limitado a 20)
+                        best_besst = filtered_tickers[:20]
+                        st.session_state.watched_stocks = best_besst
+                        st.success(f"✅ Lista inicial criada com {len(best_besst)} ações que atendem aos critérios BESST!")
                         st.rerun()
             
             # Lista de seleção compacta
             if filtered_tickers:
                 # Mostrar dica para lista inicial se não há ações monitoradas
                 if not st.session_state.watched_stocks and apply_barsi_filter:
-                    st.info("💡 **Dica:** Use o botão 'Criar Lista Barsi' para começar com uma seleção inteligente das melhores ações!")
+                    st.info("💡 **Dica:** Use o botão 'Criar Lista BESST' para começar com uma seleção inteligente das melhores ações!")
                 
                 st.write(f"**Ações encontradas ({len(filtered_tickers)}):**")
                 
@@ -427,7 +429,7 @@ if st.session_state.show_config:
                         st.rerun()
             else:
                 if not search_filter and selected_sector == "Todos" and not apply_barsi_filter:
-                    st.info("🎯 **Sugestão:** Ative o filtro Barsi para ver uma seleção inteligente de ações que atendem aos critérios de investimento!")
+                    st.info("🎯 **Sugestão:** Ative o filtro BESST para ver uma seleção inteligente de ações que atendem aos critérios de investimento de Luiz Barsi!")
                 else:
                     st.info("Nenhuma ação encontrada com os filtros aplicados.")
 
